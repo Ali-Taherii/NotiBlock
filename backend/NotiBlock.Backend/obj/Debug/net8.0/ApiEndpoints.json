@@ -1,0 +1,28 @@
+[
+  {
+    "ContainingType": "NotiBlock.Backend.Controllers.RecallController",
+    "Method": "Create",
+    "RelativePath": "api/Recall",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "dto",
+        "Type": "NotiBlock.Backend.DTOs.RecallCreateDto",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "NotiBlock.Backend.Controllers.RecallController",
+    "Method": "GetAll",
+    "RelativePath": "api/Recall",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  }
+]

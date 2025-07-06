@@ -1,3 +1,7 @@
+// Pseudocode:
+// 1. Add CORS services to the DI container with a policy that allows any origin, method, and header.
+// 2. Register the CORS middleware before controllers are mapped.
+
 using Microsoft.EntityFrameworkCore;
 using NotiBlock.Backend.Data;
 using NotiBlock.Backend.Interfaces;
@@ -17,6 +21,17 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IRecallService, RecallService>();
 
+// Add CORS policy
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -25,6 +40,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Use CORS before other middleware that uses endpoints
+app.UseCors("AllowAll");
 
 app.UseHttpsRedirection();
 

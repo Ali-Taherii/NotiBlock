@@ -20,6 +20,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IRecallService, RecallService>();
+builder.Services.AddScoped<IConsumerService, ConsumerService>();
 
 // Add CORS policy
 builder.Services.AddCors(options =>

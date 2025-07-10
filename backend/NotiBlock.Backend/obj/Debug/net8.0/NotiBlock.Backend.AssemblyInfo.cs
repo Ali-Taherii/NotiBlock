@@ -11,10 +11,11 @@
 using System;
 using System.Reflection;
 
+[assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute("22e675bb-65ee-4bc5-8e8a-a7681e8d404d")]
 [assembly: System.Reflection.AssemblyCompanyAttribute("NotiBlock.Backend")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6b0a516db822c1ffc287faf56aa72c36adf7f477")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5ea2cb6c20977562ac3c5060467ed3bd657aa020")]
 [assembly: System.Reflection.AssemblyProductAttribute("NotiBlock.Backend")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NotiBlock.Backend")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

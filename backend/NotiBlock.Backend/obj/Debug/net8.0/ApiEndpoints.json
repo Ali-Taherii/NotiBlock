@@ -1,5 +1,47 @@
 [
   {
+    "ContainingType": "NotiBlock.Backend.Controllers.ConsumerController",
+    "Method": "Register",
+    "RelativePath": "api/Consumer",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "dto",
+        "Type": "NotiBlock.Backend.DTOs.ConsumerCreateDTO",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "NotiBlock.Backend.Controllers.ConsumerController",
+    "Method": "GetByEmail",
+    "RelativePath": "api/Consumer/{email}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "email",
+        "Type": "System.String",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "NotiBlock.Backend.Controllers.ConsumerController",
+    "Method": "GetAll",
+    "RelativePath": "api/Consumer/all",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
     "ContainingType": "NotiBlock.Backend.Controllers.RecallController",
     "Method": "Create",
     "RelativePath": "api/Recall",

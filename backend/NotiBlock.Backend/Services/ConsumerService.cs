@@ -27,6 +27,7 @@ namespace NotiBlock.Backend.Services
 
             var consumer = new Consumer
             {
+                Id = Guid.NewGuid().ToString(),
                 Email = dto.Email,
                 Name = dto.Name,
                 PhoneNumber = dto.PhoneNumber

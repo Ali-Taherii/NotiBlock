@@ -6,14 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace NotiBlock.Backend.Services
 {
-    public class ConsumerService : IConsumerService
+    public class ConsumerService(AppDbContext context) : IConsumerService
     {
-        private readonly AppDbContext _context;
-
-        public ConsumerService(AppDbContext context)
-        {
-            _context = context;
-        }
+        private readonly AppDbContext _context = context;
 
         public async Task<Consumer> CreateConsumerAsync(ConsumerCreateDTO dto)
         {
@@ -53,12 +48,7 @@ namespace NotiBlock.Backend.Services
                 .Include(c => c.Responses)
                 .FirstOrDefaultAsync(c => c.Email == email);
 
-            if (consumer == null)
-            {
-                throw new InvalidOperationException($"Consumer with email '{email}' not found.");
-            }
-
-            return consumer;
+            return consumer ?? throw new InvalidOperationException($"Consumer with email '{email}' not found.");
         }
     }
 }

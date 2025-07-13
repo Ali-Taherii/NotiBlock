@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NotiBlock.Backend")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5ea2cb6c20977562ac3c5060467ed3bd657aa020")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+26f3be1364752fc71788c89f06a71cf0feb1a2f4")]
 [assembly: System.Reflection.AssemblyProductAttribute("NotiBlock.Backend")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NotiBlock.Backend")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

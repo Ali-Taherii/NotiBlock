@@ -1,17 +1,19 @@
 import { useState } from "react";
-import { createRecall } from "../api/recalls"; // Adjust the import path as necessary
+import { createRecall } from "../api/recalls";
 
 export default function RecallForm() {
   const [productId, setProductId] = useState("");
   const [reason, setReason] = useState("");
+  const [actionRequired, setActionRequired] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const data = { productId, reason };
+      const data = { productId, reason, actionRequired };
       await createRecall(data);
       setProductId("");
       setReason("");
+      setActionRequired("");
       alert("Recall created successfully!");
     } catch (error) {
       console.error("Error creating recall:", error);
@@ -41,6 +43,15 @@ export default function RecallForm() {
             onChange={(e) => setReason(e.target.value)}
           />
         </div>
+        <div>
+          <label className="block mb-1 font-medium">Action Required</label>
+          <input
+            type="text"
+            className="w-full border border-gray-300 rounded px-3 py-2"
+            value={actionRequired}
+            onChange={(e) => setActionRequired(e.target.value)}
+          />
+        </div>
         <button
           type="submit"
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
@@ -48,7 +59,6 @@ export default function RecallForm() {
           Submit
         </button>
       </form>
-      {status && <p className="mt-4">{status}</p>}
     </div>
   );
 }

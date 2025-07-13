@@ -7,14 +7,9 @@ namespace NotiBlock.Backend.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class ConsumerController : ControllerBase
+    public class ConsumerController(IConsumerService service) : ControllerBase
     {
-        private readonly IConsumerService _service;
-
-        public ConsumerController(IConsumerService service)
-        {
-            _service = service;
-        }
+        private readonly IConsumerService _service = service;
 
         [HttpPost]
         public async Task<IActionResult> Register([FromBody] ConsumerCreateDTO dto)

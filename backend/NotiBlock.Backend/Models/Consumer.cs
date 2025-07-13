@@ -7,7 +7,7 @@
         public string? Name { get; set; }
         public string? PhoneNumber { get; set; }
 
-        public ICollection<ConsumerResponse> Responses { get; set; } = new List<ConsumerResponse>();
+        public ICollection<ConsumerResponse> Responses { get; set; } = [];
 
     }
 }

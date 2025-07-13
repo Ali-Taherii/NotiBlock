@@ -1,23 +1,23 @@
 {
   "format": 1,
   "restore": {
-    "F:\\Ali-Taherii\\NotiBlock\\backend\\NotiBlock.Backend\\NotiBlock.Backend.csproj": {}
+    "Z:\\NotiBlock\\backend\\NotiBlock.Backend\\NotiBlock.Backend.csproj": {}
   },
   "projects": {
-    "F:\\Ali-Taherii\\NotiBlock\\backend\\NotiBlock.Backend\\NotiBlock.Backend.csproj": {
+    "Z:\\NotiBlock\\backend\\NotiBlock.Backend\\NotiBlock.Backend.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "F:\\Ali-Taherii\\NotiBlock\\backend\\NotiBlock.Backend\\NotiBlock.Backend.csproj",
+        "projectUniqueName": "Z:\\NotiBlock\\backend\\NotiBlock.Backend\\NotiBlock.Backend.csproj",
         "projectName": "NotiBlock.Backend",
-        "projectPath": "F:\\Ali-Taherii\\NotiBlock\\backend\\NotiBlock.Backend\\NotiBlock.Backend.csproj",
-        "packagesPath": "C:\\Users\\nf\\.nuget\\packages\\",
-        "outputPath": "F:\\Ali-Taherii\\NotiBlock\\backend\\NotiBlock.Backend\\obj\\",
+        "projectPath": "Z:\\NotiBlock\\backend\\NotiBlock.Backend\\NotiBlock.Backend.csproj",
+        "packagesPath": "C:\\Users\\alita\\.nuget\\packages\\",
+        "outputPath": "Z:\\NotiBlock\\backend\\NotiBlock.Backend\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+          "F:\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\nf\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\alita\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -27,8 +27,7 @@
         "sources": {
           "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
           "C:\\Program Files\\dotnet\\library-packs": {},
-          "https://api.nuget.org/v3/index.json": {},
-          "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json": {}
+          "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net8.0": {
@@ -108,7 +107,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.300-preview.0.25177.5/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.300/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

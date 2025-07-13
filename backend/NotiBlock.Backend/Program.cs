@@ -1,7 +1,3 @@
-// Pseudocode:
-// 1. Add CORS services to the DI container with a policy that allows any origin, method, and header.
-// 2. Register the CORS middleware before controllers are mapped.
-
 using Microsoft.EntityFrameworkCore;
 using NotiBlock.Backend.Data;
 using NotiBlock.Backend.Interfaces;

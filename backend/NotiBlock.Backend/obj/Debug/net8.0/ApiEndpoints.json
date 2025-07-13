@@ -59,12 +59,97 @@
   },
   {
     "ContainingType": "NotiBlock.Backend.Controllers.RecallController",
+    "Method": "GetById",
+    "RelativePath": "api/Recall/{id}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "NotiBlock.Backend.Controllers.RecallController",
+    "Method": "Delete",
+    "RelativePath": "api/Recall/{id}",
+    "HttpMethod": "DELETE",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "NotiBlock.Backend.Controllers.RecallController",
+    "Method": "Update",
+    "RelativePath": "api/Recall/{id}",
+    "HttpMethod": "PUT",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      },
+      {
+        "Name": "dto",
+        "Type": "NotiBlock.Backend.DTOs.RecallCreateDto",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "NotiBlock.Backend.Controllers.RecallController",
     "Method": "GetAll",
-    "RelativePath": "api/Recall",
+    "RelativePath": "api/Recall/all",
     "HttpMethod": "GET",
     "IsController": true,
     "Order": 0,
     "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "NotiBlock.Backend.Controllers.RecallController",
+    "Method": "GetByIssueDate",
+    "RelativePath": "api/Recall/issuedAt/{issuedAt}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "issuedAt",
+        "Type": "System.DateTime",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "NotiBlock.Backend.Controllers.RecallController",
+    "Method": "GetByProductId",
+    "RelativePath": "api/Recall/product/{productId}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "productId",
+        "Type": "System.String",
+        "IsRequired": true
+      }
+    ],
     "ReturnTypes": []
   }
 ]

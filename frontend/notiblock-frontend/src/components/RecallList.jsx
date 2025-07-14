@@ -2,7 +2,7 @@ import { useState } from 'react'
 import EditRecallModal from './EditRecallModal'
 import DeleteRecallModal from './DeleteRecallModal'
 
-export default function RecallList({ recalls }) {
+export default function RecallList({ recalls, refetch }) {
   const [selectedRecall, setSelectedRecall] = useState(null)
   const [modalType, setModalType] = useState(null) // NEW: "edit" or "delete"
 
@@ -53,17 +53,19 @@ export default function RecallList({ recalls }) {
         </div>
       ))}
 
-      {/* Correct modal based on type */}
+      {/* modal based on type */}
       {selectedRecall && modalType === 'edit' && (
         <EditRecallModal
           recall={selectedRecall}
           onClose={closeModal}
+          refetch={refetch}
         />
       )}
       {selectedRecall && modalType === 'delete' && (
         <DeleteRecallModal
           recall={selectedRecall}
           onClose={closeModal}
+          refetch={refetch} 
         />
       )}
     </div>

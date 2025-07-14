@@ -1,12 +1,13 @@
 import { deleteRecall } from "../api/recalls"
 import { useState } from "react";
 
-export default function DeleteRecallModal({ recall, onClose }) {
+export default function DeleteRecallModal({ recall, onClose, refetch }) {
   const [status, setStatus] = useState(null)
 
   const handleDelete = async () => {
     try {
-        await deleteRecall(recall.id)
+      await deleteRecall(recall.id)
+      refetch() // Refetch recalls after deletion
       setStatus('Recall deleted successfully!')
       setTimeout(() => {
         setStatus(null)

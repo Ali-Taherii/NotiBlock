@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createRecall } from "../api/recalls";
 
-export default function RecallForm() {
+export default function RecallForm({refetch}) {
   const [productId, setProductId] = useState("");
   const [reason, setReason] = useState("");
   const [actionRequired, setActionRequired] = useState("");
@@ -14,6 +14,7 @@ export default function RecallForm() {
       setProductId("");
       setReason("");
       setActionRequired("");
+      refetch(); // Refetch recalls after creation
       alert("Recall created successfully!");
     } catch (error) {
       console.error("Error creating recall:", error);

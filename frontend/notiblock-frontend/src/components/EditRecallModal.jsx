@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { updateRecall } from '../api/recalls'
 
-export default function EditRecallModal({ recall, onClose }) {
+export default function EditRecallModal({ recall, onClose, refetch }) {
   const [productId, setProductId] = useState(recall.productId)
   const [reason, setReason] = useState(recall.reason)
   const [actionRequired, setActionRequired] = useState(recall.actionRequired)
@@ -17,7 +17,9 @@ export default function EditRecallModal({ recall, onClose }) {
         actionRequired,
       })
         
-        setStatus('Updated successfully!')
+      refetch() // Refetch recalls after update
+      
+      setStatus('Recall updated successfully!')
         
       // Optionally close modal after success:
       setTimeout(() => {

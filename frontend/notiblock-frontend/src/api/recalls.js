@@ -9,7 +9,9 @@ export async function createRecall(data) {
     if (!res.ok) {
         throw new Error('Failed to create recall')
     }
-    return res.json()
+
+    const json = await res.json()
+    return json.data;
 }
 
 export async function getRecalls() {
@@ -17,7 +19,9 @@ export async function getRecalls() {
     if (!res.ok) {
         throw new Error('Failed to fetch recalls')
     }
-    return res.json()
+
+    const json = await res.json()
+    return json.data;
 }
 
 export async function getRecallById(id) {
@@ -25,7 +29,9 @@ export async function getRecallById(id) {
     if (!res.ok) {
         throw new Error('Failed to fetch recall')
     }
-    return res.json()
+
+    const json = await res.json()
+    return json.data;
 }
 
 export async function updateRecall(id, data) {
@@ -39,7 +45,9 @@ export async function updateRecall(id, data) {
     if (!res.ok) {
         throw new Error('Failed to update recall')
     }
-    return res.json()
+
+    const json = await res.json()
+    return json.data;
 }
 
 export async function deleteRecall(id) {
@@ -49,5 +57,7 @@ export async function deleteRecall(id) {
     if (!res.ok) {
         throw new Error('Failed to delete recall')
     }
-    return res.json()
+
+    const json = await res.json()
+    return json.data;
 }

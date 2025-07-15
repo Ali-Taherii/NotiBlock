@@ -11,10 +11,27 @@ namespace NotiBlock.Backend.Controllers
         private readonly IRecallService _service = service;
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] RecallCreateDto dto)
+        public async Task<IActionResult> Create ([FromBody] RecallCreateDto dto)
         {
-            var recall = await _service.CreateRecallAsync(dto);
-            return Ok(recall);
+            {
+                try
+                {
+                    var recall = await _service.CreateRecallAsync(dto);
+                    return Ok(new { success = true, message = "Recall created successfully", data = recall });
+                }
+                catch (ArgumentNullException ex)
+                {
+                    return BadRequest(new { success = false, message = ex.Message });
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return BadRequest(new { success = false, message = ex.Message });
+                }
+                catch (Exception ex)
+                {
+                    return StatusCode(500, new { success = false, message = "An error occurred while creating the recall", error = ex.Message });
+                }
+            }
         }
 
         [HttpGet("{id}")]
@@ -23,11 +40,11 @@ namespace NotiBlock.Backend.Controllers
             try
             {
                 var recall = await _service.GetRecallByIdAsync(id);
-                return Ok(recall);
+                return Ok(new { success = true, message = "Recall retrieved successfully", data = recall });
             }
             catch (InvalidOperationException ex)
             {
-                return NotFound(ex.Message);
+                return NotFound(new { success = false, message = ex.Message });
             }
         }
 
@@ -37,11 +54,11 @@ namespace NotiBlock.Backend.Controllers
             try
             {
                 var recall = await _service.GetRecallByProductIdAsync(productId);
-                return Ok(recall);
+                return Ok(new { success = true, message = "Recall retrieved successfully", data = recall });
             }
             catch (InvalidOperationException ex)
             {
-                return NotFound(ex.Message);
+                return NotFound(new { success = false, message = ex.Message });
             }
         }
 
@@ -49,37 +66,57 @@ namespace NotiBlock.Backend.Controllers
         public async Task<IActionResult> GetByIssueDate(DateTime issuedAt)
         {
             var recalls = await _service.GetRecallsByIssueDate(issuedAt);
-            return Ok(recalls);
+            return Ok(new { success = true, message = "Recalls retrieved successfully", data = recalls });
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var result = await _service.DeleteRecallByIdAsync(id);
-            return result is not null ? Ok(result) : NotFound($"Recall with ID '{id}' not found.");
+            try
+            {
+                var result = await _service.DeleteRecallByIdAsync(id);
+                if (result is not null)
+                    return Ok(new { success = true, message = "Recall deleted successfully", data = result });
+                
+                return NotFound(new { success = false, message = $"Recall with ID '{id}' not found." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                // Log the exception here
+                return StatusCode(500, new { success = false, message = "An error occurred while deleting the recall", error = ex.Message });
+            }
         }
         
-
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] RecallCreateDto dto)
         {
             try
             {
                 var updatedRecall = await _service.UpdateRecallAsync(id, dto);
-                return Ok(updatedRecall);
+                return Ok(new { success = true, message = "Recall updated successfully", data = updatedRecall });
             }
             catch (InvalidOperationException ex)
             {
-                return NotFound(ex.Message);
+                return NotFound(new { success = false, message = ex.Message });
             }
         }
 
         [HttpGet("all")]
         public async Task<IActionResult> GetAll()
         {
-            var recalls = await _service.GetAllRecallsAsync();
-            return Ok(recalls);
+            try
+            {
+                var recalls = await _service.GetAllRecallsAsync();
+                return Ok(new { success = true, message = "All recalls retrieved successfully", data = recalls });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "An error occurred while retrieving recalls", error = ex.Message });
+            }
         }
-
     }
 }

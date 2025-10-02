@@ -5,19 +5,15 @@ using Microsoft.EntityFrameworkCore;
 using NotiBlock.Backend.DTOs;
 using NotiBlock.Backend.Interfaces;
 using Nethereum.Signer;
+using NotiBlock.Backend.Helpers;
 
 namespace NotiBlock.Backend.Services
 {
-    public class AuthService : IAuthService
+    public class AuthService(AppDbContext context, IPasswordHasher<AppUser> passwordHasher, IConfiguration config) : IAuthService
     {
-        private readonly AppDbContext _context;
-        private readonly IPasswordHasher<AppUser> _passwordHasher;
-
-        public AuthService(AppDbContext context, IPasswordHasher<AppUser> passwordHasher)
-        {
-            _context = context;
-            _passwordHasher = passwordHasher;
-        }
+        private readonly AppDbContext _context = context;
+        private readonly IPasswordHasher<AppUser> _passwordHasher = passwordHasher;
+        private readonly IConfiguration _config = config;
 
         public async Task<AppUser> RegisterAsync(AuthDTO.AuthRegisterDto dto)
         {
@@ -39,18 +35,17 @@ namespace NotiBlock.Backend.Services
             return user;
         }
 
-
-        public async Task<AppUser?> LoginAsync(AuthDTO.AuthLoginDto dto)
+        public async Task<string> LoginAsync(AuthDTO.AuthLoginDto dto)
         {
             var user = await _context.AppUsers
-                .FirstOrDefaultAsync(u => u.Email == dto.Email);
-            if (user == null)
-                return null;
+                .FirstOrDefaultAsync(u => u.Email == dto.Email) ?? throw new Exception("Invalid credentials");
+
             var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
             if (result == PasswordVerificationResult.Failed)
-                return null;
-            return user;
-                
-        } 
+                throw new Exception("Invalid credentials");
+
+            // Generate Token
+            return JwtTokenGenerator.GenerateToken(user, _config);
+        }
     }
 }

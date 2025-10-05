@@ -46,12 +46,12 @@ namespace NotiBlock.Backend.Controllers
                 {
                     HttpOnly = true,
                     Secure = true, // Use only on HTTPS
-                    SameSite = SameSiteMode.Strict,
-                    Expires = DateTime.UtcNow.AddDays(1) // Cookie expiration (adjust as needed)
+                    SameSite = SameSiteMode.None,
+                    Expires = DateTime.UtcNow.AddSeconds(30)
                 });
 
                 // Return the token in the response body as well
-                return Ok(new { message = "Login successful", token });
+                return Ok(new { message = "Login successful"});
             }
             catch (Exception ex)
             {

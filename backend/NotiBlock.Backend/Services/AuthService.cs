@@ -23,10 +23,10 @@ namespace NotiBlock.Backend.Services
                 throw new Exception("User with this email already exists.");
 
             var user = new AppUser
-                {
-                    Email = dto.Email,
-                    Role = dto.Role
-                };
+            {
+                Email = dto.Email,
+                Role = dto.Role
+            };
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
 

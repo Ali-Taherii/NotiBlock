@@ -63,7 +63,7 @@ namespace NotiBlock.Backend.Controllers
                 });
 
                 // Return the token in the response body as well
-                return Ok(new { message = "Login successful"});
+                return Ok(new { message = "Login successful" });
             }
             catch (Exception ex)
             {
@@ -86,7 +86,7 @@ namespace NotiBlock.Backend.Controllers
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                          ?? User.FindFirst("sub")?.Value;
 
-            return Ok(new {userId, email, role});
+            return Ok(new { userId, email, role });
         }
 
 

@@ -6,7 +6,7 @@
         {
             public string Email { get; set; } = string.Empty;
             public string Password { get; set; } = string.Empty;
-            public string Role { get; set; } = "Consumer"; // Default role is Consumer
+            public string Role { get; set; } = "consumer"; // Default role is Consumer
         }
 
         public class AuthLoginDto

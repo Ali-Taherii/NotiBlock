@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -24,7 +24,6 @@ builder.Services.AddScoped<IRecallService, RecallService>();
 builder.Services.AddScoped<IConsumerService, ConsumerService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
-builder.Services.AddScoped<ITicketService, TicketService>();
 
 // Add CORS policy
 builder.Services.AddCors(options =>
@@ -38,7 +37,28 @@ builder.Services.AddCors(options =>
     });
 });
 
-// JWT Token - Configure BEFORE building the app
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+// Use CORS before other middleware that uses endpoints
+app.UseCors("AllowFrontend");
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+
+
+// JWT Token
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var jwtKey = jwtSettings["Key"];
 if (string.IsNullOrEmpty(jwtKey))
@@ -66,41 +86,10 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
-
-    // Extract token from cookie instead of Authorization header
-    options.Events = new JwtBearerEvents
-    {
-        OnMessageReceived = context =>
-        {
-            var token = context.Request.Cookies["jwt_token"];
-            if (!string.IsNullOrEmpty(token))
-            {
-                context.Token = token;
-            }
-            return Task.CompletedTask;
-        }
-    };
 });
 
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-// Use CORS before other middleware that uses endpoints
-app.UseCors("AllowFrontend");
-
-app.UseHttpsRedirection();
-
-// Use Authentication before Authorization
+// Use JWT Authentication and Authorization
+builder.Services.AddAuthorization();
 app.UseAuthentication();
 app.UseAuthorization();
-
-app.MapControllers();
-
-app.Run();
 

@@ -15,7 +15,7 @@ namespace NotiBlock.Backend.Services
         private readonly IPasswordHasher<AppUser> _passwordHasher = passwordHasher;
         private readonly IConfiguration _config = config;
 
-        public async Task<string> RegisterAsync(AuthDTO.AuthRegisterDto dto)
+        public async Task<AppUser> RegisterAsync(AuthDTO.AuthRegisterDto dto)
         {
             var existingUser = await _context.AppUsers
                 .FirstOrDefaultAsync(u => u.Email == dto.Email);
@@ -32,8 +32,7 @@ namespace NotiBlock.Backend.Services
 
             _context.AppUsers.Add(user);
             await _context.SaveChangesAsync();
-
-            return JwtTokenGenerator.GenerateToken(user, _config);
+            return user;
         }
 
         public async Task<string> LoginAsync(AuthDTO.AuthLoginDto dto)

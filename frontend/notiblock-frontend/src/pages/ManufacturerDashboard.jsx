@@ -5,6 +5,12 @@ import ManufacturerTicket from '../components/dashboard/Manufacturer/Manufacture
 import { useApprovedTickets } from '../hooks/useApprovedTickets'
 import { createRecall } from '../api/recalls'
 
+
+const approvedTicketsMock = [
+  { id: 1, serial: 'ABC123', model: 'Toaster X200', consumer: 'sara@example.com', status: 'approved' },
+  { id: 2, serial: 'DEF456', model: 'Fan TurboPro', consumer: 'ali@example.com', status: 'approved' },
+]
+
 export default function ManufacturerDashboard() {
   const { tickets, loading, error, refetch } = useApprovedTickets()
   const [selectedTicket, setSelectedTicket] = useState(null)
@@ -24,7 +30,7 @@ export default function ManufacturerDashboard() {
 
   const handleCreateRecall = async (e) => {
     e.preventDefault()
-    
+
     if (!reason.trim() || !actionRequired.trim()) {
       setStatus('Please fill in all fields.')
       return
@@ -43,19 +49,19 @@ export default function ManufacturerDashboard() {
       const result = await createRecall(recallPayload)
       
       // Generate QR code data
-      const qrPayload = JSON.stringify({
+    const qrPayload = JSON.stringify({
         recallId: result.id || 'generated',
         productSerial: selectedTicket.productId || selectedTicket.id,
-        recallReason: reason,
+      recallReason: reason,
         actionRequired: actionRequired,
         timestamp: new Date().toISOString(),
-      })
-
+    })
+      
       setRecallData({
         recall: result,
         qrData: qrPayload,
       })
-      
+
       setStatus('Recall created successfully!')
       refetch() // Refresh the tickets list
       
@@ -64,7 +70,7 @@ export default function ManufacturerDashboard() {
       setStatus('Error creating recall. Please try again.')
     } finally {
       setIsSubmitting(false)
-    }
+  }
   }
 
   if (loading) return <div className="p-6">Loading approved tickets...</div>
@@ -93,12 +99,15 @@ export default function ManufacturerDashboard() {
               ))}
             </div>
           )}
-          <button
+                <button
             onClick={() => refetch()}
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
+                >
             Refresh Tickets
-          </button>
+                </button>
+              </div>
+            ))}
+          </div>
         </>
       )}
 
@@ -121,13 +130,16 @@ export default function ManufacturerDashboard() {
               <p><strong>Consumer ID:</strong> {selectedTicket.userId}</p>
             </div>
 
-            <form onSubmit={handleCreateRecall} className="space-y-4">
-              <div>
-                <label className="block mb-1 font-medium">Recall Reason</label>
-                <textarea
+          <form onSubmit={handleCreateRecall} className="space-y-4">
+            <p><strong>Serial:</strong> {selectedTicket.serial}</p>
+            <p><strong>Consumer:</strong> {selectedTicket.consumer}</p>
+
+            <div>
+              <label className="block mb-1 font-medium">Recall Reason</label>
+              <textarea
                   className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
                   placeholder="Describe the reason for the recall"
                   rows="3"
                   required
@@ -142,9 +154,9 @@ export default function ManufacturerDashboard() {
                   onChange={(e) => setActionRequired(e.target.value)}
                   placeholder="What action should consumers take?"
                   rows="3"
-                  required
-                />
-              </div>
+                required
+              />
+            </div>
 
               <div className="flex space-x-3">
                 <button 
@@ -160,7 +172,7 @@ export default function ManufacturerDashboard() {
                   className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
                 >
                   Cancel
-                </button>
+            </button>
               </div>
 
               {status && (
@@ -168,7 +180,7 @@ export default function ManufacturerDashboard() {
                   {status}
                 </p>
               )}
-            </form>
+          </form>
           </div>
 
           {recallData && (

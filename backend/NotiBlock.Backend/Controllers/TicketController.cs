@@ -36,7 +36,7 @@ namespace NotiBlock.Backend.Controllers
         {
             try
             {
-                var regulatorId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var regulatorId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var updatedTicket = await _service.UpdateTicketStatus(ticketId, dto.Status, regulatorId);
                 if (updatedTicket == null) return NotFound("Ticket not found or already processed.");
                 return Ok(updatedTicket);

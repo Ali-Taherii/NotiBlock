@@ -1,48 +1,34 @@
 import { useState } from 'react'
+import { useAuth } from '../hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
 
 export default function AuthPage() {
+  const auth = useAuth()
+  const login = auth?.login
+  const signup = auth?.signup
+  const navigate = useNavigate()
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState('consumer') // default role
+  const [role, setRole] = useState('')
   const [message, setMessage] = useState('')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    const url = isLogin 
-      ? 'https://localhost:7179/api/auth/login'
-      : 'https://localhost:7179/api/auth/register'
-
-    const payload = {
-      email,
-      password,
-      ...(isLogin ? {} : { role }) // include role only during signup
-    }
-
     try {
-      const res = await fetch(url, {
-          method: 'POST',
-          credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-        const data = await res.json()
-        
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Something went wrong')
+      if (isLogin) {
+        const userData = await login(email, password)
+        setMessage('Login successful!')
+        navigate(`/${userData.role}/dashboard`)
+      } else {
+        const userData = await signup(email, password, role)
+        setMessage('Signup successful!')
+        setIsLogin(true)
+        navigate(`/${userData.role}/dashboard`)
       }
-
-      setMessage(`✅ ${isLogin ? 'Logged in' : 'Signed up'} successfully!`)
-      
-      // Optional: Redirect based on role
-      // window.location.href = `/${data.role}/dashboard`
-
     } catch (err) {
-      console.error(err)
-      setMessage(`❌ ${err.message}`)
+      setMessage(err.message || 'An error occurred')
     }
   }
 
@@ -84,7 +70,7 @@ export default function AuthPage() {
                 onChange={(e) => setRole(e.target.value)}
               >
                 <option value="consumer">Consumer</option>
-                <option value="reseller">Reseller</option>
+                <option value="regulator">Regulator</option>
                 <option value="manufacturer">Manufacturer</option>
               </select>
             </div>

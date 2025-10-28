@@ -6,6 +6,7 @@ using NotiBlock.Backend.DTOs;
 using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Models;
 using Org.BouncyCastle.Bcpg.OpenPgp;
+using System.Threading.Tasks;
 
 namespace NotiBlock.Backend.Services
 {
@@ -13,22 +14,58 @@ namespace NotiBlock.Backend.Services
     {
         private readonly AppDbContext _context = context;
 
-        public async Task<Recall> CreateRecallAsync(RecallCreateDto dto)
+        public async Task<Recall> CreateRecallAsync(RecallCreateDTO dto, int manufacturerId)
         {
-            var recall = new Recall { ProductId = dto.ProductId, Reason = dto.Reason, ActionRequired=dto.ActionRequired };
+            var recall = new Recall
+            {
+                ProductId = dto.ProductId,
+                Reason = dto.Reason,
+                ActionRequired = dto.ActionRequired,
+                ManufacturerId = manufacturerId
+            };
+
             _context.Recalls.Add(recall);
             await _context.SaveChangesAsync();
             return recall;
         }
 
+        public async Task<Recall> IssueRecallToBlockchainAsync(int recallId)
+        {
+            var recall = await GetRecallByIdAsync(recallId);
+
+            // Simulate blockchain integration
+            // In a real implementation, this would interact with a blockchain service
+            string transactionHash = await SimulateBlockchainRecordAsync(recall);
+
+            recall.TransactionHash = transactionHash;
+            _context.Recalls.Update(recall);
+            await _context.SaveChangesAsync();
+
+            return recall;
+        }
+
+        private static async Task<string> SimulateBlockchainRecordAsync(Recall recall)
+        {
+            // Simulate blockchain interaction
+            // This would be replaced with actual blockchain service calls
+            await Task.Delay(100); // Simulate network latency
+
+            // Generate a fake transaction hash
+            return $"0x{Guid.NewGuid():N}";
+        }
+
         public async Task<IEnumerable<Recall>> GetAllRecallsAsync()
         {
-            return await _context.Recalls.ToListAsync();
+            return await _context.Recalls
+                .Include(r => r.Manufacturer)
+                .ToListAsync();
         }
 
         public async Task<Recall> GetRecallByIdAsync(int id)
         {
-            var recall = await _context.Recalls.FindAsync(id);
+            var recall = await _context.Recalls
+                .Include(r => r.Manufacturer)
+                .FirstOrDefaultAsync(r => r.Id == id);
 
             return recall ?? throw new InvalidOperationException($"Recall with ID '{id}' not found.");
         }
@@ -36,6 +73,7 @@ namespace NotiBlock.Backend.Services
         public async Task<IEnumerable<Recall>> GetRecallsByIssueDate(DateTime issuedAt)
         {
             return await _context.Recalls
+                .Include(r => r.Manufacturer)
                 .Where(r => r.IssuedAt.Date == issuedAt.Date)
                 .ToListAsync();
         }
@@ -43,7 +81,9 @@ namespace NotiBlock.Backend.Services
         public async Task<Recall> GetRecallByProductIdAsync(string productId)
         {
             var recall = await _context.Recalls
+                .Include(r => r.Manufacturer)
                 .FirstOrDefaultAsync(r => r.ProductId == productId);
+
             return recall ?? throw new InvalidOperationException($"Recall for product ID '{productId}' not found.");
         }
 
@@ -57,13 +97,13 @@ namespace NotiBlock.Backend.Services
                 return recall;
 
             }
-            catch(InvalidOperationException ex)
+            catch (InvalidOperationException ex)
             {
                 throw new InvalidOperationException($"Recall with ID '{id}' not found.", ex);
             }
         }
 
-        public async Task<Recall> UpdateRecallAsync(int id, RecallCreateDto dto)
+        public async Task<Recall> UpdateRecallAsync(int id, RecallCreateDTO dto)
         {
             var recall = await GetRecallByIdAsync(id);
             recall.ProductId = dto.ProductId;

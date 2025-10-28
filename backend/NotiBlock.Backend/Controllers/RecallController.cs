@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using NotiBlock.Backend.DTOs;
 using NotiBlock.Backend.Interfaces;
+using System.Security.Claims;
 
 namespace NotiBlock.Backend.Controllers
 {
@@ -11,111 +13,126 @@ namespace NotiBlock.Backend.Controllers
         private readonly IRecallService _service = service;
 
         [HttpPost]
-        public async Task<IActionResult> Create ([FromBody] RecallCreateDto dto)
-        {
-            {
-                try
-                {
-                    var recall = await _service.CreateRecallAsync(dto);
-                    return Ok(new { success = true, message = "Recall created successfully", data = recall });
-                }
-                catch (ArgumentNullException ex)
-                {
-                    return BadRequest(new { success = false, message = ex.Message });
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return BadRequest(new { success = false, message = ex.Message });
-                }
-                catch (Exception ex)
-                {
-                    return StatusCode(500, new { success = false, message = "An error occurred while creating the recall", error = ex.Message });
-                }
-            }
-        }
-
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(int id)
+        [Authorize(Roles = "manufacturer")]
+        public async Task<IActionResult> CreateRecall([FromBody] RecallCreateDTO dto)
         {
             try
             {
-                var recall = await _service.GetRecallByIdAsync(id);
-                return Ok(new { success = true, message = "Recall retrieved successfully", data = recall });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return NotFound(new { success = false, message = ex.Message });
-            }
-        }
+                var manufacturerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var recall = await _service.CreateRecallAsync(dto, manufacturerId);
 
-        [HttpGet("product/{productId}")]
-        public async Task<IActionResult> GetByProductId(string productId)
-        {
-            try
-            {
-                var recall = await _service.GetRecallByProductIdAsync(productId);
-                return Ok(new { success = true, message = "Recall retrieved successfully", data = recall });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return NotFound(new { success = false, message = ex.Message });
-            }
-        }
+                // Issue recall to blockchain
+                recall = await _service.IssueRecallToBlockchainAsync(recall.Id);
 
-        [HttpGet("issuedAt/{issuedAt:datetime}")]
-        public async Task<IActionResult> GetByIssueDate(DateTime issuedAt)
-        {
-            var recalls = await _service.GetRecallsByIssueDate(issuedAt);
-            return Ok(new { success = true, message = "Recalls retrieved successfully", data = recalls });
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
-        {
-            try
-            {
-                var result = await _service.DeleteRecallByIdAsync(id);
-                if (result is not null)
-                    return Ok(new { success = true, message = "Recall deleted successfully", data = result });
-                
-                return NotFound(new { success = false, message = $"Recall with ID '{id}' not found." });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return NotFound(new { success = false, message = ex.Message });
+                return Ok(recall);
             }
             catch (Exception ex)
             {
-                // Log the exception here
-                return StatusCode(500, new { success = false, message = "An error occurred while deleting the recall", error = ex.Message });
-            }
-        }
-        
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] RecallCreateDto dto)
-        {
-            try
-            {
-                var updatedRecall = await _service.UpdateRecallAsync(id, dto);
-                return Ok(new { success = true, message = "Recall updated successfully", data = updatedRecall });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return NotFound(new { success = false, message = ex.Message });
+                return BadRequest(ex.Message);
             }
         }
 
         [HttpGet("all")]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAllRecalls()
         {
             try
             {
                 var recalls = await _service.GetAllRecallsAsync();
-                return Ok(new { success = true, message = "All recalls retrieved successfully", data = recalls });
+                return Ok(new { success = true, data = recalls });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = "An error occurred while retrieving recalls", error = ex.Message });
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetRecallById(int id)
+        {
+            try
+            {
+                var recall = await _service.GetRecallByIdAsync(id);
+                return Ok(recall);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpGet("product/{productId}")]
+        public async Task<IActionResult> GetRecallByProductId(string productId)
+        {
+            try
+            {
+                var recall = await _service.GetRecallByProductIdAsync(productId);
+                return Ok(recall);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "manufacturer")]
+        public async Task<IActionResult> DeleteRecall(int id)
+        {
+            try
+            {
+                var manufacturerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var recall = await _service.DeleteRecallByIdAsync(id);
+                return Ok(recall);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPut("{id}")]
+        [Authorize(Roles = "manufacturer")]
+        public async Task<IActionResult> UpdateRecall(int id, [FromBody] RecallCreateDTO dto)
+        {
+            try
+            {
+                var manufacturerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var recall = await _service.UpdateRecallAsync(id, dto);
+                return Ok(recall);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpGet("date/{issuedAt}")]
+        public async Task<IActionResult> GetRecallsByIssueDate(DateTime issuedAt)
+        {
+            try
+            {
+                var recalls = await _service.GetRecallsByIssueDate(issuedAt);
+                return Ok(recalls);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
             }
         }
     }

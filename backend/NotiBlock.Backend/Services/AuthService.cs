@@ -15,7 +15,7 @@ namespace NotiBlock.Backend.Services
         private readonly IPasswordHasher<AppUser> _passwordHasher = passwordHasher;
         private readonly IConfiguration _config = config;
 
-        public async Task<AppUser> RegisterAsync(AuthDTO.AuthRegisterDto dto)
+        public async Task<string> RegisterAsync(AuthDTO.AuthRegisterDto dto)
         {
             var existingUser = await _context.AppUsers
                 .FirstOrDefaultAsync(u => u.Email == dto.Email);
@@ -23,16 +23,17 @@ namespace NotiBlock.Backend.Services
                 throw new Exception("User with this email already exists.");
 
             var user = new AppUser
-                {
-                    Email = dto.Email,
-                    Role = dto.Role
-                };
+            {
+                Email = dto.Email,
+                Role = dto.Role
+            };
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
 
             _context.AppUsers.Add(user);
             await _context.SaveChangesAsync();
-            return user;
+
+            return JwtTokenGenerator.GenerateToken(user, _config);
         }
 
         public async Task<string> LoginAsync(AuthDTO.AuthLoginDto dto)

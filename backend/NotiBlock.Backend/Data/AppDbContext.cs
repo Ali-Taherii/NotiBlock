@@ -7,8 +7,8 @@ namespace NotiBlock.Backend.Data
     {
         public DbSet<Recall> Recalls => Set<Recall>();
         public DbSet<AppUser> AppUsers => Set<AppUser>();
-
         public DbSet<Consumer> Consumers => Set<Consumer>();
         public DbSet<ConsumerResponse> ConsumerResponses => Set<ConsumerResponse>();
+        public DbSet<Ticket> Tickets => Set<Ticket>();
     }
-} 
+}

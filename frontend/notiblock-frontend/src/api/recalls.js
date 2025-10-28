@@ -1,63 +1,29 @@
-export async function createRecall(data) {
-    const res = await fetch('https://localhost:7179/api/recall', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-    })
-    if (!res.ok) {
-        throw new Error('Failed to create recall')
-    }
+import { apiFetch } from "./api";
 
-    const json = await res.json()
-    return json.data;
+export async function createRecall(data) {
+    return await apiFetch("/recall", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
 }
 
 export async function getRecalls() {
-    const res = await fetch('https://localhost:7179/api/recall/all')
-    if (!res.ok) {
-        throw new Error('Failed to fetch recalls')
-    }
-
-    const json = await res.json()
-    return json.data;
+    return await apiFetch("/recall/all");
 }
 
 export async function getRecallById(id) {
-    const res = await fetch(`https://localhost:7179/api/recall/${id}`)
-    if (!res.ok) {
-        throw new Error('Failed to fetch recall')
-    }
-
-    const json = await res.json()
-    return json.data;
+    return await apiFetch(`/recall/${id}`);
 }
 
 export async function updateRecall(id, data) {
-    const res = await fetch(`https://localhost:7179/api/recall/${id}`, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+    return await apiFetch(`/recall/${id}`, {
+        method: "PUT",
         body: JSON.stringify(data),
-    })
-    if (!res.ok) {
-        throw new Error('Failed to update recall')
-    }
-
-    const json = await res.json()
-    return json.data;
+    });
 }
 
 export async function deleteRecall(id) {
-    const res = await fetch(`https://localhost:7179/api/recall/${id}`, {
-        method: 'DELETE',
-    })
-    if (!res.ok) {
-        throw new Error('Failed to delete recall')
-    }
-
-    const json = await res.json()
-    return json.data;
+    return await apiFetch(`/recall/${id}`, {
+        method: "DELETE",
+    });
 }

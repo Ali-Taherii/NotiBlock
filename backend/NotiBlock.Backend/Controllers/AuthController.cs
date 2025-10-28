@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.DTOs;
+using NotiBlock.Backend.Interfaces;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 
 namespace NotiBlock.Backend.Controllers
 {
@@ -18,8 +20,18 @@ namespace NotiBlock.Backend.Controllers
 
             try
             {
-                var user = await _authService.RegisterAsync(registerDto);
-                return Ok(new { message = "Registration successful", userId = user.Id });
+                var token = await _authService.RegisterAsync(registerDto);
+
+                // Set the JWT token as an HTTP-only cookie
+                Response.Cookies.Append("jwt_token", token, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true, // Use only on HTTPS
+                    SameSite = SameSiteMode.None,
+                    Expires = DateTime.UtcNow.AddHours(5)
+                });
+
+                return Ok(new { message = "Registration successful" });
             }
             catch (Exception)
             {
@@ -47,17 +59,50 @@ namespace NotiBlock.Backend.Controllers
                     HttpOnly = true,
                     Secure = true, // Use only on HTTPS
                     SameSite = SameSiteMode.None,
-                    Expires = DateTime.UtcNow.AddSeconds(30)
+                    Expires = DateTime.UtcNow.AddHours(5)
                 });
 
                 // Return the token in the response body as well
-                return Ok(new { message = "Login successful"});
+                return Ok(new { message = "Login successful" });
             }
             catch (Exception ex)
             {
                 // Log the exception
                 return StatusCode(500, new { message = ex.Message });
             }
+        }
+
+        [Authorize]
+        [HttpGet("me")]
+        public IActionResult Me()
+        {
+            // Extract standard claims
+            var email = User.FindFirst(ClaimTypes.Email)?.Value
+                        ?? User.FindFirst("email")?.Value;
+
+            var role = User.FindFirst(ClaimTypes.Role)?.Value
+                       ?? User.FindFirst("role")?.Value;
+
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                         ?? User.FindFirst("sub")?.Value;
+
+            return Ok(new { userId, email, role });
+        }
+
+
+        [HttpPost("logout")]
+        public IActionResult Logout()
+        {
+            // Clear the JWT token cookie by setting an expired cookie with the same name
+            Response.Cookies.Append("jwt_token", "", new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.None,
+                Expires = DateTime.UtcNow.AddDays(-1) // Set expiration in the past
+            });
+
+            return Ok(new { message = "Logout successful" });
         }
     }
 }

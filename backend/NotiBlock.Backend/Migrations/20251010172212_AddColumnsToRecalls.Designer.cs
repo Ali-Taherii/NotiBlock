@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NotiBlock.Backend.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NotiBlock.Backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251010172212_AddColumnsToRecalls")]
+    partial class AddColumnsToRecalls
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -44,7 +47,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppUsers", (string)null);
+                    b.ToTable("AppUsers");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Consumer", b =>
@@ -63,7 +66,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Consumers", (string)null);
+                    b.ToTable("Consumers");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ConsumerResponse", b =>
@@ -96,7 +99,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasIndex("RecallId");
 
-                    b.ToTable("ConsumerResponses", (string)null);
+                    b.ToTable("ConsumerResponses");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Recall", b =>
@@ -132,7 +135,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasIndex("ManufacturerId");
 
-                    b.ToTable("Recalls", (string)null);
+                    b.ToTable("Recalls");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Ticket", b =>
@@ -173,7 +176,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasIndex("CreatedById");
 
-                    b.ToTable("Tickets", (string)null);
+                    b.ToTable("Tickets");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ConsumerResponse", b =>

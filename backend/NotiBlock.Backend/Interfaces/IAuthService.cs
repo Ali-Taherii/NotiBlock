@@ -6,7 +6,7 @@ namespace NotiBlock.Backend.Interfaces
 
     public interface IAuthService
     {
-        Task<string> RegisterAsync(AuthDTO.AuthRegisterDto dto);
-        Task<string> LoginAsync(AuthDTO.AuthLoginDto dto);
+        //Task<string> RegisterAsync(AuthDTO.AuthRegisterDto dto);
+        //Task<string> LoginAsync(AuthDTO.AuthLoginDto dto);
     }
 }

@@ -57,14 +57,14 @@ namespace NotiBlock.Backend.Services
         public async Task<IEnumerable<Recall>> GetAllRecallsAsync()
         {
             return await _context.Recalls
-                .Include(r => r.Manufacturer)
+                //.Include(r => r.Manufacturer)
                 .ToListAsync();
         }
 
         public async Task<Recall> GetRecallByIdAsync(int id)
         {
             var recall = await _context.Recalls
-                .Include(r => r.Manufacturer)
+                //.Include(r => r.Manufacturer)
                 .FirstOrDefaultAsync(r => r.Id == id);
 
             return recall ?? throw new InvalidOperationException($"Recall with ID '{id}' not found.");
@@ -73,7 +73,7 @@ namespace NotiBlock.Backend.Services
         public async Task<IEnumerable<Recall>> GetRecallsByIssueDate(DateTime issuedAt)
         {
             return await _context.Recalls
-                .Include(r => r.Manufacturer)
+                //.Include(r => r.Manufacturer)
                 .Where(r => r.IssuedAt.Date == issuedAt.Date)
                 .ToListAsync();
         }
@@ -81,7 +81,7 @@ namespace NotiBlock.Backend.Services
         public async Task<Recall> GetRecallByProductIdAsync(string productId)
         {
             var recall = await _context.Recalls
-                .Include(r => r.Manufacturer)
+                //.Include(r => r.Manufacturer)
                 .FirstOrDefaultAsync(r => r.ProductId == productId);
 
             return recall ?? throw new InvalidOperationException($"Recall for product ID '{productId}' not found.");

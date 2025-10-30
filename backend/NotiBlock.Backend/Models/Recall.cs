@@ -9,6 +9,6 @@
         public DateTime IssuedAt { get; set; } = DateTime.UtcNow;
         public string? TransactionHash { get; set; }
         public int ManufacturerId { get; set; }
-        public AppUser? Manufacturer { get; set; }
+        //public AppUser? Manufacturer { get; set; }
     }
 }

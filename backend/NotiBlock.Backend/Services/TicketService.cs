@@ -61,8 +61,8 @@ namespace NotiBlock.Backend.Services
         public async Task<IEnumerable<Ticket>> GetAllTicketsAsync()
         {
             return await _context.Tickets
-                .Include(t => t.CreatedBy)
-                .Include(t => t.ApprovedBy)
+                //.Include(t => t.CreatedBy)
+                //.Include(t => t.ApprovedBy)
                 .ToListAsync();
         }
 
@@ -91,8 +91,8 @@ namespace NotiBlock.Backend.Services
         {
             return await _context.Tickets
                 .Where(ticket => ticket.Status.ToLower() == status.ToLower())
-                .Include(t => t.CreatedBy)
-                .Include(t => t.ApprovedBy)
+                //.Include(t => t.CreatedBy)
+                //.Include(t => t.ApprovedBy)
                 .ToListAsync();
         }
 
@@ -100,8 +100,8 @@ namespace NotiBlock.Backend.Services
         {
             return await _context.Tickets
                 .Where(ticket => ticket.CreatedById == userId)
-                .Include(t => t.CreatedBy)
-                .Include(t => t.ApprovedBy)
+                //.Include(t => t.CreatedBy)
+                //.Include(t => t.ApprovedBy)
                 .ToListAsync();
         }
 

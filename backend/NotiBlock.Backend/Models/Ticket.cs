@@ -5,13 +5,13 @@
         public int Id { get; set; }
         public string ProductId { get; set; } = string.Empty;
         public string IssueDescription { get; set; } = string.Empty;
-        public string Status { get; set; } = "Pending";
+        public string Status { get; set; } = "pending";
 
         public int CreatedById { get; set; }
-        public AppUser? CreatedBy { get; set; }
+        //public AppUser? CreatedBy { get; set; }
 
         public int? ApprovedById { get; set; }
-        public AppUser? ApprovedBy { get; set; }
+        //public AppUser? ApprovedBy { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ApprovedAt { get; set; }

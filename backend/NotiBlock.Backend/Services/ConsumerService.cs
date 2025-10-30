@@ -10,45 +10,44 @@ namespace NotiBlock.Backend.Services
     {
         private readonly AppDbContext _context = context;
 
-        public async Task<Consumer> CreateConsumerAsync(ConsumerCreateDTO dto)
-        {
-            var existing = await _context.Consumers
-                .FirstOrDefaultAsync(c => c.Email == dto.Email);
+        //public async Task<Consumer> CreateConsumerAsync(ConsumerCreateDTO dto)
+        //{
+        //    var existing = await _context.Consumers
+        //        .FirstOrDefaultAsync(c => c.Email == dto.Email);
 
-            if (existing != null)
-            {
-                return existing; // Already registered
-            }
+        //    if (existing != null)
+        //    {
+        //        return existing; // Already registered
+        //    }
 
-            var consumer = new Consumer
-            {
-                Id = Guid.NewGuid().ToString(),
-                Email = dto.Email,
-                Name = dto.Name,
-                PhoneNumber = dto.PhoneNumber
-            };
+        //    var consumer = new Consumer
+        //    {
+        //        Email = dto.Email,
+        //        Name = dto.Name,
+        //        PhoneNumber = dto.PhoneNumber
+        //    };
 
-            _context.Consumers.Add(consumer);
-            await _context.SaveChangesAsync();
+        //    _context.Consumers.Add(consumer);
+        //    await _context.SaveChangesAsync();
 
-            return consumer;
-        }
+        //    return consumer;
+        //}
 
 
-        public async Task<IEnumerable<Consumer>> GetAllConsumersAsync()
-        {
-            return await _context.Consumers
-                .Include(c => c.Responses)
-                .ToListAsync();
-        }
+        //public async Task<IEnumerable<Consumer>> GetAllConsumersAsync()
+        //{
+        //    return await _context.Consumers
+        //        //.Include(c => c.Responses)
+        //        .ToListAsync();
+        //}
 
-        public async Task<Consumer> GetConsumerByEmailAsync(string email)
-        {
-            var consumer = await _context.Consumers
-                .Include(c => c.Responses)
-                .FirstOrDefaultAsync(c => c.Email == email);
+        //public async Task<Consumer> GetConsumerByEmailAsync(string email)
+        //{
+        //    var consumer = await _context.Consumers
+        //        //.Include(c => c.Responses)
+        //        .FirstOrDefaultAsync(c => c.Email == email);
 
-            return consumer ?? throw new InvalidOperationException($"Consumer with email '{email}' not found.");
-        }
+        //    return consumer ?? throw new InvalidOperationException($"Consumer with email '{email}' not found.");
+        //}
     }
 }

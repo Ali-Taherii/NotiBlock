@@ -22,8 +22,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IRecallService, RecallService>();
 builder.Services.AddScoped<IConsumerService, ConsumerService>();
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 builder.Services.AddScoped<ITicketService, TicketService>();
 
 // Add CORS policy

@@ -1,108 +1,78 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using NotiBlock.Backend.DTOs;
 using NotiBlock.Backend.Interfaces;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
 
 namespace NotiBlock.Backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class AuthController(IAuthService authService) : ControllerBase
+    public class AuthController(IAuthService service) : ControllerBase
     {
-        private readonly IAuthService _authService = authService;
+        private readonly IAuthService _service = service;
 
-        //[HttpPost("register")]
-        //public async Task<IActionResult> Register([FromBody] AuthDTO.AuthRegisterDto registerDto)
-        //{
-        //    if (!ModelState.IsValid)
-        //        return BadRequest(ModelState);
+        // Consumer Endpoints
 
-        //    try
-        //    {
-        //        var token = await _authService.RegisterAsync(registerDto);
+        [HttpPost("consumer/register")]
+        public async Task<IActionResult> RegisterConsumer([FromBody] AuthRegisterDTO dto)
+        {
+            var token = await _service.RegisterConsumerAsync(dto);
+            return Ok(new { token });
+        }
 
-        //        // Set the JWT token as an HTTP-only cookie
-        //        Response.Cookies.Append("jwt_token", token, new CookieOptions
-        //        {
-        //            HttpOnly = true,
-        //            Secure = true, // Use only on HTTPS
-        //            SameSite = SameSiteMode.None,
-        //            Expires = DateTime.UtcNow.AddHours(5)
-        //        });
-
-        //        return Ok(new { message = "Registration successful" });
-        //    }
-        //    catch (Exception)
-        //    {
-        //        // Log the exception
-        //        return StatusCode(500, new { message = "An error occurred during registration" });
-        //    }
-        //}
-
-        //[HttpPost("login")]
-        //public async Task<IActionResult> Login([FromBody] AuthDTO.AuthLoginDto loginDto)
-        //{
-        //    if (!ModelState.IsValid)
-        //        return BadRequest(ModelState);
-
-        //    try
-        //    {
-        //        var token = await _authService.LoginAsync(loginDto);
-
-        //        if (string.IsNullOrEmpty(token))
-        //            return Unauthorized(new { message = "Invalid email or password" });
-
-        //        // Set the JWT token as an HTTP-only cookie
-        //        Response.Cookies.Append("jwt_token", token, new CookieOptions
-        //        {
-        //            HttpOnly = true,
-        //            Secure = true, // Use only on HTTPS
-        //            SameSite = SameSiteMode.None,
-        //            Expires = DateTime.UtcNow.AddHours(5)
-        //        });
-
-        //        // Return the token in the response body as well
-        //        return Ok(new { message = "Login successful" });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        // Log the exception
-        //        return StatusCode(500, new { message = ex.Message });
-        //    }
-        //}
-
-        //[Authorize]
-        //[HttpGet("me")]
-        //public IActionResult Me()
-        //{
-        //    // Extract standard claims
-        //    var email = User.FindFirst(ClaimTypes.Email)?.Value
-        //                ?? User.FindFirst("email")?.Value;
-
-        //    var role = User.FindFirst(ClaimTypes.Role)?.Value
-        //               ?? User.FindFirst("role")?.Value;
-
-        //    var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-        //                 ?? User.FindFirst("sub")?.Value;
-
-        //    return Ok(new { userId, email, role });
-        //}
+        [HttpPost("consumer/login")]
+        public async Task<IActionResult> LoginConsumer([FromBody] AuthLoginDTO dto)
+        {
+            var token = await _service.LoginConsumerAsync(dto);
+            return Ok(new { token });
+        }
 
 
-        //[HttpPost("logout")]
-        //public IActionResult Logout()
-        //{
-        //    // Clear the JWT token cookie by setting an expired cookie with the same name
-        //    Response.Cookies.Append("jwt_token", "", new CookieOptions
-        //    {
-        //        HttpOnly = true,
-        //        Secure = true,
-        //        SameSite = SameSiteMode.None,
-        //        Expires = DateTime.UtcNow.AddDays(-1) // Set expiration in the past
-        //    });
+        // Reseller Endpoints
+        [HttpPost("reseller/register")]
+        public async Task<IActionResult> RegisterReseller([FromBody] AuthRegisterDTO dto)
+        {
+            var token = await _service.RegisterResellerAsync(dto);
+            return Ok(new { token });
+        }
 
-        //    return Ok(new { message = "Logout successful" });
-        //}
+        [HttpPost("reseller/login")]
+        public async Task<IActionResult> LoginReseller([FromBody] AuthLoginDTO dto)
+        {
+            var token = await _service.LoginResellerAsync(dto);
+            return Ok(new { token });
+        }
+
+
+        // Manufacturer Endpoints
+        [HttpPost("manufacturer/register")]
+        public async Task<IActionResult> RegisterManufacturer([FromBody] AuthRegisterDTO dto)
+        {
+            var token = await _service.RegisterManufacturerAsync(dto);
+            return Ok(new { token });
+        }
+
+        [HttpPost("manufacturer/login")]
+        public async Task<IActionResult> LoginManufacturer([FromBody] AuthLoginDTO dto)
+        {
+            var token = await _service.LoginManufacturerAsync(dto);
+            return Ok(new { token });
+        }
+
+
+        // Regulator Endpoints
+        [HttpPost("regulator/register")]
+        public async Task<IActionResult> RegisterRegulator([FromBody] AuthRegisterDTO dto)
+        {
+            var token = await _service.RegisterRegulatorAsync(dto);
+            return Ok(new { token });
+        }
+
+        [HttpPost("regulator/login")]
+        public async Task<IActionResult> LoginRegulator([FromBody] AuthLoginDTO dto)
+        {
+            var token = await _service.LoginRegulatorAsync(dto);
+            return Ok(new { token });
+        }
     }
 }

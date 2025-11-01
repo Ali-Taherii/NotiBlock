@@ -23,6 +23,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<IRecallService, RecallService>();
 builder.Services.AddScoped<IConsumerService, ConsumerService>();
 builder.Services.AddScoped<ITicketService, TicketService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Add CORS policy
 builder.Services.AddCors(options =>

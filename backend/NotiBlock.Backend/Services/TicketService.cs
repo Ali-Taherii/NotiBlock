@@ -90,7 +90,7 @@ namespace NotiBlock.Backend.Services
         public async Task<IEnumerable<Ticket>> GetTicketByStatus(string status)
         {
             return await _context.Tickets
-                .Where(ticket => ticket.Status.ToLower() == status.ToLower())
+                .Where(ticket => ticket.Status.Equals(status, StringComparison.CurrentCultureIgnoreCase))
                 //.Include(t => t.CreatedBy)
                 //.Include(t => t.ApprovedBy)
                 .ToListAsync();

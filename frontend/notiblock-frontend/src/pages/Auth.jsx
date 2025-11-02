@@ -10,7 +10,7 @@ export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState('')
+  const [role, setRole] = useState('consumer')
   const [message, setMessage] = useState('')
 
   const handleSubmit = async (e) => {
@@ -18,7 +18,7 @@ export default function AuthPage() {
 
     try {
       if (isLogin) {
-        const userData = await login(email, password)
+        const userData = await login(email, password, role)
         setMessage('Login successful!')
         navigate(`/${userData.role}/dashboard`)
       } else {
@@ -61,20 +61,20 @@ export default function AuthPage() {
             />
           </div>
 
-          {!isLogin && (
-            <div>
-              <label className="block mb-1">Role</label>
-              <select
-                className="w-full border border-gray-300 px-3 py-2 rounded"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-              >
-                <option value="consumer">Consumer</option>
-                <option value="regulator">Regulator</option>
-                <option value="manufacturer">Manufacturer</option>
-              </select>
-            </div>
-          )}
+          <div>
+            <label className="block mb-1">Role</label>
+            <select
+              className="w-full border border-gray-300 px-3 py-2 rounded"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              required
+            >
+              <option value="consumer">Consumer</option>
+              <option value="manufacturer">Manufacturer</option>
+              <option value="regulator">Regulator</option>
+              <option value="reseller">Reseller</option>
+            </select>
+          </div>
 
           <button
             type="submit"

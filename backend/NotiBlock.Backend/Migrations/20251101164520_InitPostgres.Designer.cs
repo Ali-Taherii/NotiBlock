@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NotiBlock.Backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251030114100_AddAuthFieldsToUserTables")]
-    partial class AddAuthFieldsToUserTables
+    [Migration("20251101164520_InitPostgres")]
+    partial class InitPostgres
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

@@ -14,7 +14,7 @@ export default function useRecalls() {
             .finally(() => setLoading(false))
     }, [])
 
-    console.log(recalls.map(recall => recall.productId));
+    //console.log(recalls.map(recall => recall.productId));
 
     useEffect(() => {
         fetchRecalls()

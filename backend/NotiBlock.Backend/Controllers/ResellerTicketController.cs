@@ -6,7 +6,7 @@ using System.Security.Claims;
 
 namespace NotiBlock.Backend.Controllers
 {
-    [Authorize(Roles = "Reseller")]
+    [Authorize(Roles = "reseller")]
     [ApiController]
     [Route("api/reseller-tickets")]
     public class ResellerTicketController(IResellerTicketService service) : ControllerBase

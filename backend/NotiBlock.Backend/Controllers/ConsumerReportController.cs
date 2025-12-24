@@ -6,7 +6,7 @@ using System.Security.Claims;
 
 namespace NotiBlock.Backend.Controllers
 {
-    [Authorize(Roles = "Consumer")]
+    [Authorize(Roles = "consumer")]
     [ApiController]
     [Route("api/[controller]")]
     public class ConsumerReportController(IConsumerReportService service) : ControllerBase

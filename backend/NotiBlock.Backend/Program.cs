@@ -24,6 +24,9 @@ builder.Services.AddScoped<IRecallService, RecallService>();
 builder.Services.AddScoped<IConsumerService, ConsumerService>();
 //builder.Services.AddScoped<ITicketService, TicketService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IConsumerReportService, ConsumerReportService>();
+builder.Services.AddScoped<IResellerTicketService, ResellerTicketService>();
 
 // Add CORS policy
 builder.Services.AddCors(options =>

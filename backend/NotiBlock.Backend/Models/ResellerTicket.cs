@@ -17,7 +17,7 @@
 
         public ICollection<ConsumerReport> ConsumerReports { get; set; } = [];
         
-        public int? ApprovedById { get; set; }
+        public Guid? ApprovedById { get; set; }
         public Regulator? ApprovedBy { get; set; }
     }
 }

@@ -21,13 +21,16 @@ export default function RecallList({ recalls, refetch }) {
     setModalType(null)
   }
 
+  // Ensure recalls is always an array
+  const safeRecalls = Array.isArray(recalls) ? recalls : []
+
   return (
     <div className="space-y-4">
-      {recalls.length === 0 && (
+      {safeRecalls.length === 0 && (
         <p className="text-gray-600">No recalls found.</p>
       )}
 
-      {recalls.map(recall => (
+      {safeRecalls.map(recall => (
         <div 
           key={recall.id} 
           className="p-4 border border-gray-300 rounded shadow-sm bg-white"

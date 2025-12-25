@@ -28,21 +28,21 @@ namespace NotiBlock.Backend.Data
 
             // One-to-many: Consumer owns many Products
             modelBuilder.Entity<Product>()
-                .HasOne(p => p.Owner)
+                .HasOne<Consumer>() // Fix: specify the related entity type, not the FK property type
                 .WithMany()
                 .HasForeignKey(p => p.OwnerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             // One-to-many: Manufacturer makes many Products
             modelBuilder.Entity<Product>()
-                .HasOne(p => p.Manufacturer)
+                .HasOne<Manufacturer>()
                 .WithMany()
                 .HasForeignKey(p => p.ManufacturerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             // Optional Reseller
             modelBuilder.Entity<Product>()
-                .HasOne(p => p.Reseller)
+                .HasOne<Reseller>()
                 .WithMany()
                 .HasForeignKey(p => p.ResellerId)
                 .OnDelete(DeleteBehavior.SetNull);

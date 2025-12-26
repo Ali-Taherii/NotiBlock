@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using NotiBlock.Backend.DTOs;
 using NotiBlock.Backend.Interfaces;
+using NotiBlock.Backend.Models;
 using System.Security.Claims;
 
 namespace NotiBlock.Backend.Controllers
@@ -157,6 +158,64 @@ namespace NotiBlock.Backend.Controllers
             {
                 _logger.LogError(ex, "Error deleting product {SerialNumber}", serialNumber);
                 return StatusCode(500, ApiResponse.ErrorResponse("An error occurred while deleting the product"));
+            }
+        }
+
+        // list endpoints
+        [HttpGet("manufacturer/my-products")]
+        [Authorize(Roles = "manufacturer")]
+        public async Task<IActionResult> GetMyProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var result = await _service.GetManufacturerProductsAsync(userId, page, pageSize);
+
+                _logger.LogInformation("Manufacturer {UserId} retrieved their products (Page {Page})", userId, page);
+                return Ok(ApiResponse<PagedResult<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving manufacturer products");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving products"));
+            }
+        }
+
+        [HttpGet("reseller/my-products")]
+        [Authorize(Roles = "reseller")]
+        public async Task<IActionResult> GetMyResellerProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var result = await _service.GetResellerProductsAsync(userId, page, pageSize);
+
+                _logger.LogInformation("Reseller {UserId} retrieved their products (Page {Page})", userId, page);
+                return Ok(ApiResponse<PagedResult<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving reseller products");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving products"));
+            }
+        }
+
+        [HttpGet("consumer/my-products")]
+        [Authorize(Roles = "consumer")]
+        public async Task<IActionResult> GetMyConsumerProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var result = await _service.GetConsumerProductsAsync(userId, page, pageSize);
+
+                _logger.LogInformation("Consumer {UserId} retrieved their products (Page {Page})", userId, page);
+                return Ok(ApiResponse<PagedResult<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving consumer products");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving products"));
             }
         }
     }

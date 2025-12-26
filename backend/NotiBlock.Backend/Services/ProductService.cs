@@ -238,5 +238,117 @@ namespace NotiBlock.Backend.Services
 
             return true;
         }
+
+        // list methods
+        public async Task<PagedResult<Product>> GetManufacturerProductsAsync(Guid manufacturerId, int page, int pageSize)
+        {
+            // Validate and normalize pagination parameters
+            if (page < 1)
+            {
+                _logger.LogWarning("Invalid page number {Page} requested, defaulting to 1", page);
+                page = 1;
+            }
+
+            if (pageSize < 1 || pageSize > 100)
+            {
+                _logger.LogWarning("Invalid page size {PageSize} requested, defaulting to 20", pageSize);
+                pageSize = 20;
+            }
+
+            var query = _context.Products
+                .Where(p => p.ManufacturerId == manufacturerId)
+                .OrderByDescending(p => p.RegisteredAt);
+
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            _logger.LogInformation("Retrieved {Count} products for manufacturer {ManufacturerId} (Page {Page} of {TotalPages})",
+                items.Count, manufacturerId, page, Math.Ceiling(totalCount / (double)pageSize));
+
+            return new PagedResult<Product>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+
+        public async Task<PagedResult<Product>> GetResellerProductsAsync(Guid resellerId, int page, int pageSize)
+        {
+            // Validate and normalize pagination parameters
+            if (page < 1)
+            {
+                _logger.LogWarning("Invalid page number {Page} requested, defaulting to 1", page);
+                page = 1;
+            }
+
+            if (pageSize < 1 || pageSize > 100)
+            {
+                _logger.LogWarning("Invalid page size {PageSize} requested, defaulting to 20", pageSize);
+                pageSize = 20;
+            }
+
+            var query = _context.Products
+                .Where(p => p.ResellerId == resellerId)
+                .OrderByDescending(p => p.RegisteredAt);
+
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            _logger.LogInformation("Retrieved {Count} products for reseller {ResellerId} (Page {Page} of {TotalPages})",
+                items.Count, resellerId, page, Math.Ceiling(totalCount / (double)pageSize));
+
+            return new PagedResult<Product>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+
+        public async Task<PagedResult<Product>> GetConsumerProductsAsync(Guid consumerId, int page, int pageSize)
+        {
+            // Validate and normalize pagination parameters
+            if (page < 1)
+            {
+                _logger.LogWarning("Invalid page number {Page} requested, defaulting to 1", page);
+                page = 1;
+            }
+
+            if (pageSize < 1 || pageSize > 100)
+            {
+                _logger.LogWarning("Invalid page size {PageSize} requested, defaulting to 20", pageSize);
+                pageSize = 20;
+            }
+
+            var query = _context.Products
+                .Where(p => p.OwnerId == consumerId)
+                .OrderByDescending(p => p.RegisteredAt);
+
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            _logger.LogInformation("Retrieved {Count} products for consumer {ConsumerId} (Page {Page} of {TotalPages})",
+                items.Count, consumerId, page, Math.Ceiling(totalCount / (double)pageSize));
+
+            return new PagedResult<Product>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
     }
 }

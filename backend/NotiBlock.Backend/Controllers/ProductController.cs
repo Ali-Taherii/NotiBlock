@@ -8,63 +8,149 @@ namespace NotiBlock.Backend.Controllers
 {
     [ApiController]
     [Route("api/products")]
-    public class ProductController(IProductService service) : ControllerBase
+    public class ProductController(IProductService service, ILogger<ProductController> logger) : ControllerBase
     {
         private readonly IProductService _service = service;
+        private readonly ILogger<ProductController> _logger = logger;
 
         [HttpPost("create")]
         [Authorize(Roles = "manufacturer")]
         public async Task<IActionResult> Create([FromBody] ProductCreateDTO dto)
         {
-            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var result = await _service.CreateProductAsync(dto, userId);
-            return Ok(ApiResponse<object>.SuccessResponse(result, "Product created successfully"));
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var result = await _service.CreateProductAsync(dto, userId);
+                _logger.LogInformation("Product created successfully by user {UserId}", userId);
+                return Ok(ApiResponse<object>.SuccessResponse(result, "Product created successfully"));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid product creation request");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating product");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while creating the product"));
+            }
         }
 
         [HttpPost("register")]
         [Authorize(Roles = "consumer, reseller")]
         public async Task<IActionResult> Register([FromBody] ProductRegisterDTO dto)
         {
-            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
-            var result = await _service.RegisterProductAsync(dto, userId, role);
-            return Ok(ApiResponse<object>.SuccessResponse(result, "Product registered successfully"));
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+                var result = await _service.RegisterProductAsync(dto, userId, role);
+                _logger.LogInformation("Product registered successfully by user {UserId} with role {Role}", userId, role);
+                return Ok(ApiResponse<object>.SuccessResponse(result, "Product registered successfully"));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Product not found for registration");
+                return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid product registration request");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error registering product");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while registering the product"));
+            }
         }
 
         [HttpGet("{serialNumber}")]
         public async Task<IActionResult> GetBySerialNumber(string serialNumber)
         {
-            var result = await _service.GetProductBySerialNumberAsync(serialNumber);
-            if (result == null)
-                return NotFound(ApiResponse<object>.ErrorResponse("Product not found"));
+            try
+            {
+                var result = await _service.GetProductBySerialNumberAsync(serialNumber);
+                if (result == null)
+                {
+                    _logger.LogWarning("Product not found with serial number {SerialNumber}", serialNumber);
+                    return NotFound(ApiResponse<object>.ErrorResponse("Product not found"));
+                }
 
-            return Ok(ApiResponse<object>.SuccessResponse(result));
+                _logger.LogInformation("Product retrieved successfully with serial number {SerialNumber}", serialNumber);
+                return Ok(ApiResponse<object>.SuccessResponse(result));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving product with serial number {SerialNumber}", serialNumber);
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving the product"));
+            }
         }
 
         [HttpPut("{serialNumber}")]
         [Authorize(Roles = "manufacturer, reseller")]
         public async Task<IActionResult> Update(string serialNumber, [FromBody] ProductUpdateDTO dto)
         {
-            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
-            var updatedProduct = await _service.UpdateProductAsync(serialNumber, dto, userId, role);
-            return Ok(ApiResponse<object>.SuccessResponse(updatedProduct, "Product updated successfully"));
+                var updatedProduct = await _service.UpdateProductAsync(serialNumber, dto, userId, role);
+                _logger.LogInformation("Product {SerialNumber} updated successfully by user {UserId}", serialNumber, userId);
+                return Ok(ApiResponse<object>.SuccessResponse(updatedProduct, "Product updated successfully"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Unauthorized update attempt on product {SerialNumber}", serialNumber);
+                return StatusCode(403, ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Product not found for update: {SerialNumber}", serialNumber);
+                return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid product update request for {SerialNumber}", serialNumber);
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating product {SerialNumber}", serialNumber);
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while updating the product"));
+            }
         }
 
         [HttpDelete("{serialNumber}")]
         [Authorize(Roles = "manufacturer")]
         public async Task<IActionResult> Delete(string serialNumber)
         {
-            var product = await _service.GetProductBySerialNumberAsync(serialNumber);
-            if (product == null)
-                return NotFound(ApiResponse.ErrorResponse("Product not found"));
+            try
+            {
+                var product = await _service.GetProductBySerialNumberAsync(serialNumber);
+                if (product == null)
+                {
+                    _logger.LogWarning("Product not found for deletion: {SerialNumber}", serialNumber);
+                    return NotFound(ApiResponse.ErrorResponse("Product not found"));
+                }
 
-            var deleted = await _service.DeleteProductAsync(serialNumber);
-            if (!deleted)
-                return NotFound(ApiResponse.ErrorResponse("Product could not be deleted"));
+                var deleted = await _service.DeleteProductAsync(serialNumber);
+                if (!deleted)
+                {
+                    _logger.LogWarning("Failed to delete product {SerialNumber}", serialNumber);
+                    return NotFound(ApiResponse.ErrorResponse("Product could not be deleted"));
+                }
 
-            return Ok(ApiResponse.SuccessResponse("Product deleted successfully"));
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                _logger.LogInformation("Product {SerialNumber} deleted successfully by user {UserId}", serialNumber, userId);
+                return Ok(ApiResponse.SuccessResponse("Product deleted successfully"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting product {SerialNumber}", serialNumber);
+                return StatusCode(500, ApiResponse.ErrorResponse("An error occurred while deleting the product"));
+            }
         }
     }
 }

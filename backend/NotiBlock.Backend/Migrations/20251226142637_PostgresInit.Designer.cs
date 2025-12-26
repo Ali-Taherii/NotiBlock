@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NotiBlock.Backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251103195930_AddProductAndReports")]
-    partial class AddProductAndReports
+    [Migration("20251226142637_PostgresInit")]
+    partial class PostgresInit
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -137,7 +137,7 @@ namespace NotiBlock.Backend.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("OwnerId")
+                    b.Property<Guid?>("OwnerId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("RegisteredAt")
@@ -264,10 +264,7 @@ namespace NotiBlock.Backend.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int?>("ApprovedById")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("ApprovedById1")
+                    b.Property<Guid?>("ApprovedById")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Category")
@@ -290,7 +287,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ApprovedById1");
+                    b.HasIndex("ApprovedById");
 
                     b.HasIndex("ResellerId", "Category")
                         .IsUnique();
@@ -326,35 +323,28 @@ namespace NotiBlock.Backend.Migrations
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Product", b =>
                 {
-                    b.HasOne("NotiBlock.Backend.Models.Manufacturer", "Manufacturer")
+                    b.HasOne("NotiBlock.Backend.Models.Manufacturer", null)
                         .WithMany()
                         .HasForeignKey("ManufacturerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("NotiBlock.Backend.Models.Consumer", "Owner")
+                    b.HasOne("NotiBlock.Backend.Models.Consumer", null)
                         .WithMany()
                         .HasForeignKey("OwnerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("NotiBlock.Backend.Models.Reseller", "Reseller")
+                    b.HasOne("NotiBlock.Backend.Models.Reseller", null)
                         .WithMany()
                         .HasForeignKey("ResellerId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Manufacturer");
-
-                    b.Navigation("Owner");
-
-                    b.Navigation("Reseller");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ResellerTicket", b =>
                 {
                     b.HasOne("NotiBlock.Backend.Models.Regulator", "ApprovedBy")
                         .WithMany()
-                        .HasForeignKey("ApprovedById1");
+                        .HasForeignKey("ApprovedById");
 
                     b.HasOne("NotiBlock.Backend.Models.Reseller", "Reseller")
                         .WithMany()

@@ -7,13 +7,93 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NotiBlock.Backend.Migrations
 {
     /// <inheritdoc />
-    public partial class AddProductAndReports : Migration
+    public partial class PostgresInit : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "Tickets");
+            migrationBuilder.CreateTable(
+                name: "Consumers",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: true),
+                    Email = table.Column<string>(type: "text", nullable: true),
+                    PasswordHash = table.Column<string>(type: "text", nullable: false),
+                    PhoneNumber = table.Column<string>(type: "text", nullable: true),
+                    WalletAddress = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Consumers", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Manufacturers",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CompanyName = table.Column<string>(type: "text", nullable: false),
+                    Email = table.Column<string>(type: "text", nullable: false),
+                    PasswordHash = table.Column<string>(type: "text", nullable: false),
+                    WalletAddress = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Manufacturers", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Recalls",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ProductId = table.Column<string>(type: "text", nullable: false),
+                    Reason = table.Column<string>(type: "text", nullable: false),
+                    ActionRequired = table.Column<string>(type: "text", nullable: false),
+                    IssuedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    TransactionHash = table.Column<string>(type: "text", nullable: true),
+                    ManufacturerId = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Recalls", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Regulators",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    AgencyName = table.Column<string>(type: "text", nullable: false),
+                    Email = table.Column<string>(type: "text", nullable: false),
+                    PasswordHash = table.Column<string>(type: "text", nullable: false),
+                    WalletAddress = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Regulators", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Resellers",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CompanyName = table.Column<string>(type: "text", nullable: false),
+                    Email = table.Column<string>(type: "text", nullable: false),
+                    PasswordHash = table.Column<string>(type: "text", nullable: false),
+                    WalletAddress = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Resellers", x => x.Id);
+                });
 
             migrationBuilder.CreateTable(
                 name: "Products",
@@ -24,7 +104,7 @@ namespace NotiBlock.Backend.Migrations
                     Model = table.Column<string>(type: "text", nullable: false),
                     ManufacturerId = table.Column<Guid>(type: "uuid", nullable: false),
                     ResellerId = table.Column<Guid>(type: "uuid", nullable: true),
-                    OwnerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    OwnerId = table.Column<Guid>(type: "uuid", nullable: true),
                     RegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
@@ -60,15 +140,14 @@ namespace NotiBlock.Backend.Migrations
                     Description = table.Column<string>(type: "text", nullable: false),
                     Status = table.Column<string>(type: "text", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    ApprovedById = table.Column<int>(type: "integer", nullable: true),
-                    ApprovedById1 = table.Column<Guid>(type: "uuid", nullable: true)
+                    ApprovedById = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ResellerTickets", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ResellerTickets_Regulators_ApprovedById1",
-                        column: x => x.ApprovedById1,
+                        name: "FK_ResellerTickets_Regulators_ApprovedById",
+                        column: x => x.ApprovedById,
                         principalTable: "Regulators",
                         principalColumn: "Id");
                     table.ForeignKey(
@@ -152,9 +231,9 @@ namespace NotiBlock.Backend.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_ResellerTickets_ApprovedById1",
+                name: "IX_ResellerTickets_ApprovedById",
                 table: "ResellerTickets",
-                column: "ApprovedById1");
+                column: "ApprovedById");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ResellerTickets_ResellerId_Category",
@@ -170,29 +249,25 @@ namespace NotiBlock.Backend.Migrations
                 name: "ConsumerReports");
 
             migrationBuilder.DropTable(
+                name: "Recalls");
+
+            migrationBuilder.DropTable(
                 name: "Products");
 
             migrationBuilder.DropTable(
                 name: "ResellerTickets");
 
-            migrationBuilder.CreateTable(
-                name: "Tickets",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    ApprovedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    ApprovedById = table.Column<int>(type: "integer", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedById = table.Column<int>(type: "integer", nullable: false),
-                    IssueDescription = table.Column<string>(type: "text", nullable: false),
-                    ProductId = table.Column<string>(type: "text", nullable: false),
-                    Status = table.Column<string>(type: "text", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Tickets", x => x.Id);
-                });
+            migrationBuilder.DropTable(
+                name: "Consumers");
+
+            migrationBuilder.DropTable(
+                name: "Manufacturers");
+
+            migrationBuilder.DropTable(
+                name: "Regulators");
+
+            migrationBuilder.DropTable(
+                name: "Resellers");
         }
     }
 }

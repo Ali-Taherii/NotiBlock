@@ -127,12 +127,22 @@ namespace NotiBlock.Backend.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("ManufacturerId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Model")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<Guid?>("OwnerId")
                         .HasColumnType("uuid");
@@ -145,7 +155,8 @@ namespace NotiBlock.Backend.Migrations
 
                     b.Property<string>("SerialNumber")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.HasKey("Id");
 
@@ -156,7 +167,8 @@ namespace NotiBlock.Backend.Migrations
                     b.HasIndex("ResellerId");
 
                     b.HasIndex("SerialNumber")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("Products");
                 });
@@ -320,27 +332,21 @@ namespace NotiBlock.Backend.Migrations
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Product", b =>
                 {
-                    b.HasOne("NotiBlock.Backend.Models.Manufacturer", "Manufacturer")
+                    b.HasOne("NotiBlock.Backend.Models.Manufacturer", null)
                         .WithMany()
                         .HasForeignKey("ManufacturerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("NotiBlock.Backend.Models.Consumer", "Owner")
+                    b.HasOne("NotiBlock.Backend.Models.Consumer", null)
                         .WithMany()
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("NotiBlock.Backend.Models.Reseller", "Reseller")
+                    b.HasOne("NotiBlock.Backend.Models.Reseller", null)
                         .WithMany()
                         .HasForeignKey("ResellerId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Manufacturer");
-
-                    b.Navigation("Owner");
-
-                    b.Navigation("Reseller");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ResellerTicket", b =>

@@ -9,6 +9,6 @@ namespace NotiBlock.Backend.Interfaces
         Task<Product> RegisterProductAsync(ProductRegisterDTO dto, Guid registererId, string role);
         Task<Product> GetProductBySerialNumberAsync(string serialNumber);
         Task<Product> UpdateProductAsync(string serialNumber, ProductUpdateDTO dto, Guid userId, string role);
-        Task<bool> DeleteProductAsync(string serialNumber);
+        Task<bool> DeleteProductAsync(string serialNumber, Guid userId);
     }
 }

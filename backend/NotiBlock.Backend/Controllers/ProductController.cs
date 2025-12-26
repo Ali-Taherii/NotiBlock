@@ -1,9 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotiBlock.Backend.DTOs;
-using NotiBlock.Backend.Extensions;
 using NotiBlock.Backend.Interfaces;
-using NotiBlock.Backend.Models;
 using System.Security.Claims;
 
 namespace NotiBlock.Backend.Controllers
@@ -129,16 +127,31 @@ namespace NotiBlock.Backend.Controllers
         {
             try
             {
-                var result = await _service.DeleteProductAsync(serialNumber);
-                if (!result)
-                {
-                    _logger.LogWarning("Product not found for deletion: {SerialNumber}", serialNumber);
-                    return NotFound(ApiResponse.ErrorResponse("Product not found"));
-                }
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var result = await _service.DeleteProductAsync(serialNumber, userId);
 
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                _logger.LogInformation("Product {SerialNumber} deleted successfully by user {UserId}", serialNumber, userId);
+                _logger.LogInformation("Product {SerialNumber} deleted successfully by manufacturer {UserId}", serialNumber, userId);
                 return Ok(ApiResponse.SuccessResponse("Product deleted successfully"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Unauthorized delete attempt on product {SerialNumber}", serialNumber);
+                return StatusCode(403, ApiResponse.ErrorResponse(ex.Message));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Product not found for deletion: {SerialNumber}", serialNumber);
+                return NotFound(ApiResponse.ErrorResponse(ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid delete operation on product {SerialNumber}", serialNumber);
+                return BadRequest(ApiResponse.ErrorResponse(ex.Message));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid delete request for {SerialNumber}", serialNumber);
+                return BadRequest(ApiResponse.ErrorResponse(ex.Message));
             }
             catch (Exception ex)
             {

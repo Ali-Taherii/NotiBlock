@@ -1,9 +1,12 @@
-﻿namespace NotiBlock.Backend.DTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace NotiBlock.Backend.DTOs
 {
-    // For reseller registering a product they purchased
     public class ProductRegisterDTO
     {
-        public string SerialNumber { get; set; } = string.Empty;
-        // ResellerId or ConsumerId comes from JWT claims
+        [Required(ErrorMessage = "Serial number is required")]
+        [StringLength(100, MinimumLength = 5, ErrorMessage = "Serial number must be between 5 and 100 characters")]
+        public required string SerialNumber { get; set; }
+        // No need for ManufacturerId, ResellerId, or OwnerId here; they come from JWT claims
     }
 }

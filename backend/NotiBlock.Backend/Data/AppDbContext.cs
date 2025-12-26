@@ -10,25 +10,28 @@ namespace NotiBlock.Backend.Data
         public DbSet<Reseller> Resellers => Set<Reseller>();
         public DbSet<Regulator> Regulators => Set<Regulator>();
         public DbSet<Recall> Recalls => Set<Recall>();
-        //public DbSet<Ticket> Tickets => Set<Ticket>();
-
         public DbSet<Product> Products => Set<Product>();
         public DbSet<ConsumerReport> ConsumerReports => Set<ConsumerReport>();
         public DbSet<ResellerTicket> ResellerTickets => Set<ResellerTicket>();
 
-        
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            // Unique: Product Serial Number
+            // Global query filter for soft delete
+            modelBuilder.Entity<Product>()
+                .HasQueryFilter(p => !p.IsDeleted);
+
+            // Unique: Product Serial Number (only for non-deleted products)
+            // PostgreSQL syntax for filtered index
             modelBuilder.Entity<Product>()
                 .HasIndex(p => p.SerialNumber)
-                .IsUnique();
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = false"); // PostgreSQL uses double quotes for identifiers
 
             // One-to-many: Consumer owns many Products
             modelBuilder.Entity<Product>()
-                .HasOne<Consumer>() // Fix: specify the related entity type, not the FK property type
+                .HasOne<Consumer>()
                 .WithMany()
                 .HasForeignKey(p => p.OwnerId)
                 .OnDelete(DeleteBehavior.Restrict);
@@ -65,5 +68,4 @@ namespace NotiBlock.Backend.Data
                 .IsUnique();
         }
     }
-
-    }
+}

@@ -240,7 +240,7 @@ namespace NotiBlock.Backend.Services
         }
 
         // list methods
-        public async Task<PagedResult<Product>> GetManufacturerProductsAsync(Guid manufacturerId, int page, int pageSize)
+        public async Task<PagedResultsDTO<Product>> GetManufacturerProductsAsync(Guid manufacturerId, int page, int pageSize)
         {
             // Validate and normalize pagination parameters
             if (page < 1)
@@ -268,7 +268,7 @@ namespace NotiBlock.Backend.Services
             _logger.LogInformation("Retrieved {Count} products for manufacturer {ManufacturerId} (Page {Page} of {TotalPages})",
                 items.Count, manufacturerId, page, Math.Ceiling(totalCount / (double)pageSize));
 
-            return new PagedResult<Product>
+            return new PagedResultsDTO<Product>
             {
                 Items = items,
                 TotalCount = totalCount,
@@ -277,7 +277,7 @@ namespace NotiBlock.Backend.Services
             };
         }
 
-        public async Task<PagedResult<Product>> GetResellerProductsAsync(Guid resellerId, int page, int pageSize)
+        public async Task<PagedResultsDTO<Product>> GetResellerProductsAsync(Guid resellerId, int page, int pageSize)
         {
             // Validate and normalize pagination parameters
             if (page < 1)
@@ -305,7 +305,7 @@ namespace NotiBlock.Backend.Services
             _logger.LogInformation("Retrieved {Count} products for reseller {ResellerId} (Page {Page} of {TotalPages})",
                 items.Count, resellerId, page, Math.Ceiling(totalCount / (double)pageSize));
 
-            return new PagedResult<Product>
+            return new PagedResultsDTO<Product>
             {
                 Items = items,
                 TotalCount = totalCount,
@@ -314,7 +314,7 @@ namespace NotiBlock.Backend.Services
             };
         }
 
-        public async Task<PagedResult<Product>> GetConsumerProductsAsync(Guid consumerId, int page, int pageSize)
+        public async Task<PagedResultsDTO<Product>> GetConsumerProductsAsync(Guid consumerId, int page, int pageSize)
         {
             // Validate and normalize pagination parameters
             if (page < 1)
@@ -342,7 +342,7 @@ namespace NotiBlock.Backend.Services
             _logger.LogInformation("Retrieved {Count} products for consumer {ConsumerId} (Page {Page} of {TotalPages})",
                 items.Count, consumerId, page, Math.Ceiling(totalCount / (double)pageSize));
 
-            return new PagedResult<Product>
+            return new PagedResultsDTO<Product>
             {
                 Items = items,
                 TotalCount = totalCount,

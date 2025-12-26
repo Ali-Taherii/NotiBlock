@@ -18,7 +18,7 @@ namespace NotiBlock.Backend.Controllers
         {
             var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var ticket = await _service.CreateTicketAsync(dto, userId);
-            return Ok(ticket);
+            return Ok(ApiResponse<object>.SuccessResponse(ticket, "Ticket created successfully"));
         }
     }
 }

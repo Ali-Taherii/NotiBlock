@@ -13,12 +13,8 @@ namespace NotiBlock.Backend.Controllers
     {
         private readonly IAuthService _service = service;
 
-        // Consumer Endpoints
-        [HttpPost("consumer/register")]
-        public async Task<IActionResult> RegisterConsumer([FromBody] AuthRegisterDTO dto)
+        private OkObjectResult SetTokenAndRespond(string token, string message)
         {
-            var token = await _service.RegisterConsumerAsync(dto);
-
             Response.Cookies.Append("jwt_token", token, new CookieOptions
             {
                 HttpOnly = true,
@@ -27,23 +23,22 @@ namespace NotiBlock.Backend.Controllers
                 Expires = DateTime.UtcNow.AddHours(1)
             });
 
-            return Ok(new { token });
+            return Ok(ApiResponse<object>.SuccessResponse(new { token }, message));
+        }
+
+        // Consumer Endpoints
+        [HttpPost("consumer/register")]
+        public async Task<IActionResult> RegisterConsumer([FromBody] AuthRegisterDTO dto)
+        {
+            var token = await _service.RegisterConsumerAsync(dto);
+            return SetTokenAndRespond(token, "Consumer registered successfully");
         }
 
         [HttpPost("consumer/login")]
         public async Task<IActionResult> LoginConsumer([FromBody] AuthLoginDTO dto)
         {
             var token = await _service.LoginConsumerAsync(dto);
-
-            Response.Cookies.Append("jwt_token", token, new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddHours(1)
-            });
-
-            return Ok(new { token });
+            return SetTokenAndRespond(token, "Login successful");
         }
 
 
@@ -52,32 +47,14 @@ namespace NotiBlock.Backend.Controllers
         public async Task<IActionResult> RegisterReseller([FromBody] AuthRegisterDTO dto)
         {
             var token = await _service.RegisterResellerAsync(dto);
-
-            Response.Cookies.Append("jwt_token", token, new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddHours(1)
-            });
-
-            return Ok(new { token });
+            return SetTokenAndRespond(token, "Reseller registered successfully");
         }
 
         [HttpPost("reseller/login")]
         public async Task<IActionResult> LoginReseller([FromBody] AuthLoginDTO dto)
         {
             var token = await _service.LoginResellerAsync(dto);
-
-            Response.Cookies.Append("jwt_token", token, new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddHours(1)
-            });
-
-            return Ok(new { token });
+            return SetTokenAndRespond(token, "Login successful");
         }
 
 
@@ -86,32 +63,14 @@ namespace NotiBlock.Backend.Controllers
         public async Task<IActionResult> RegisterManufacturer([FromBody] AuthRegisterDTO dto)
         {
             var token = await _service.RegisterManufacturerAsync(dto);
-
-            Response.Cookies.Append("jwt_token", token, new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddHours(1)
-            });
-
-            return Ok(new { token });
+            return SetTokenAndRespond(token, "Manufacturer registered successfully");
         }
 
         [HttpPost("manufacturer/login")]
         public async Task<IActionResult> LoginManufacturer([FromBody] AuthLoginDTO dto)
         {
             var token = await _service.LoginManufacturerAsync(dto);
-
-            Response.Cookies.Append("jwt_token", token, new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddHours(1)
-            });
-
-            return Ok(new { token });
+            return SetTokenAndRespond(token, "Login successful");
         }
 
 
@@ -120,32 +79,14 @@ namespace NotiBlock.Backend.Controllers
         public async Task<IActionResult> RegisterRegulator([FromBody] AuthRegisterDTO dto)
         {
             var token = await _service.RegisterRegulatorAsync(dto);
-
-            Response.Cookies.Append("jwt_token", token, new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddHours(1)
-            });
-
-            return Ok(new { token });
+            return SetTokenAndRespond(token, "Regulator registered successfully");
         }
 
         [HttpPost("regulator/login")]
         public async Task<IActionResult> LoginRegulator([FromBody] AuthLoginDTO dto)
         {
             var token = await _service.LoginRegulatorAsync(dto);
-
-            Response.Cookies.Append("jwt_token", token, new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddHours(1)
-            });
-
-            return Ok(new { token });
+            return SetTokenAndRespond(token, "Login successful");
         }
 
 

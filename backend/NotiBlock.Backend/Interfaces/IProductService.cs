@@ -12,8 +12,8 @@ namespace NotiBlock.Backend.Interfaces
         Task<bool> DeleteProductAsync(string serialNumber, Guid userId);
         
         // list endpoints
-        Task<PagedResult<Product>> GetManufacturerProductsAsync(Guid manufacturerId, int page, int pageSize);
-        Task<PagedResult<Product>> GetResellerProductsAsync(Guid resellerId, int page, int pageSize);
-        Task<PagedResult<Product>> GetConsumerProductsAsync(Guid consumerId, int page, int pageSize);
+        Task<PagedResultsDTO<Product>> GetManufacturerProductsAsync(Guid manufacturerId, int page, int pageSize);
+        Task<PagedResultsDTO<Product>> GetResellerProductsAsync(Guid resellerId, int page, int pageSize);
+        Task<PagedResultsDTO<Product>> GetConsumerProductsAsync(Guid consumerId, int page, int pageSize);
     }
 }

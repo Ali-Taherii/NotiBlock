@@ -5,11 +5,8 @@ using NotiBlock.Backend.Data;
 
 namespace NotiBlock.Backend.Services
 {
-    public class ConsumerReportService : IConsumerReportService
+    public class ConsumerReportService(AppDbContext context) : IConsumerReportService
     {
-        private readonly AppDbContext _context;
-        public ConsumerReportService(AppDbContext context) => _context = context;
-
         public async Task<ConsumerReport> SubmitReportAsync(ConsumerReportDTO dto, Guid consumerId)
         {
             var report = new ConsumerReport
@@ -19,8 +16,8 @@ namespace NotiBlock.Backend.Services
                 ConsumerId = consumerId,
                 CreatedAt = DateTime.UtcNow
             };
-            _context.ConsumerReports.Add(report);
-            await _context.SaveChangesAsync();
+            context.ConsumerReports.Add(report);
+            await context.SaveChangesAsync();
             return report;
         }
 

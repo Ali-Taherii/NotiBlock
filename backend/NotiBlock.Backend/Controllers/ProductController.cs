@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotiBlock.Backend.DTOs;
+using NotiBlock.Backend.Extensions;
 using NotiBlock.Backend.Interfaces;
+using NotiBlock.Backend.Models;
 using System.Security.Claims;
 
 namespace NotiBlock.Backend.Controllers
@@ -37,7 +39,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpPost("register")]
-        [Authorize(Roles = "consumer, reseller")]
+        [Authorize(Roles = "consumer,reseller")]
         public async Task<IActionResult> Register([FromBody] ProductRegisterDTO dto)
         {
             try
@@ -71,14 +73,13 @@ namespace NotiBlock.Backend.Controllers
             try
             {
                 var result = await _service.GetProductBySerialNumberAsync(serialNumber);
-                if (result == null)
-                {
-                    _logger.LogWarning("Product not found with serial number {SerialNumber}", serialNumber);
-                    return NotFound(ApiResponse<object>.ErrorResponse("Product not found"));
-                }
-
                 _logger.LogInformation("Product retrieved successfully with serial number {SerialNumber}", serialNumber);
                 return Ok(ApiResponse<object>.SuccessResponse(result));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning("Product not found with serial number {SerialNumber}", serialNumber);
+                return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
             }
             catch (Exception ex)
             {
@@ -88,7 +89,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpPut("{serialNumber}")]
-        [Authorize(Roles = "manufacturer, reseller")]
+        [Authorize(Roles = "manufacturer,reseller")]
         public async Task<IActionResult> Update(string serialNumber, [FromBody] ProductUpdateDTO dto)
         {
             try
@@ -128,18 +129,11 @@ namespace NotiBlock.Backend.Controllers
         {
             try
             {
-                var product = await _service.GetProductBySerialNumberAsync(serialNumber);
-                if (product == null)
+                var result = await _service.DeleteProductAsync(serialNumber);
+                if (!result)
                 {
                     _logger.LogWarning("Product not found for deletion: {SerialNumber}", serialNumber);
                     return NotFound(ApiResponse.ErrorResponse("Product not found"));
-                }
-
-                var deleted = await _service.DeleteProductAsync(serialNumber);
-                if (!deleted)
-                {
-                    _logger.LogWarning("Failed to delete product {SerialNumber}", serialNumber);
-                    return NotFound(ApiResponse.ErrorResponse("Product could not be deleted"));
                 }
 
                 var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);

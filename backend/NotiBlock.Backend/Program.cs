@@ -5,107 +5,140 @@ using NotiBlock.Backend.Data;
 using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Middleware;
 using NotiBlock.Backend.Services;
+using Serilog;
 using System.Text;
 
-var builder = WebApplication.CreateBuilder(args);
+// Configure Serilog before building the app
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File(
+        path: "logs/notiblock-.txt",
+        rollingInterval: RollingInterval.Day,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .CreateLogger();
 
-// Add services to the container.
-builder.Services.AddControllers();
-
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-// Add Exception Handler
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddProblemDetails();
-
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-builder.Services.AddScoped<IRecallService, RecallService>();
-builder.Services.AddScoped<IConsumerService, ConsumerService>();
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IProductService, ProductService>();
-builder.Services.AddScoped<IConsumerReportService, ConsumerReportService>();
-builder.Services.AddScoped<IResellerTicketService, ResellerTicketService>();
-   
-// Add CORS policy
-var corsOrigin = builder.Configuration.GetValue<string>("CorsSettings:AllowedOrigin") ?? "http://localhost:5173";
-builder.Services.AddCors(options =>
+try
 {
-    options.AddPolicy("AllowFrontend", policy =>
+    Log.Information("Starting NotiBlock API");
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    // Use Serilog for logging
+    builder.Host.UseSerilog();
+
+    // Add services to the container.
+    builder.Services.AddControllers();
+
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen();
+
+    // Add Exception Handler
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    builder.Services.AddProblemDetails();
+
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    builder.Services.AddScoped<IRecallService, RecallService>();
+    builder.Services.AddScoped<IConsumerService, ConsumerService>();
+    builder.Services.AddScoped<IAuthService, AuthService>();
+    builder.Services.AddScoped<IProductService, ProductService>();
+    builder.Services.AddScoped<IConsumerReportService, ConsumerReportService>();
+    builder.Services.AddScoped<IResellerTicketService, ResellerTicketService>();
+
+    // Add CORS policy
+    var corsOrigin = builder.Configuration.GetValue<string>("CorsSettings:AllowedOrigin") ?? "http://localhost:5173";
+    builder.Services.AddCors(options =>
     {
-        policy.WithOrigins(corsOrigin)
-            .AllowAnyMethod()
-            .AllowAnyHeader()
-            .AllowCredentials();
-    });
-});
-
-// JWT Token - Configure BEFORE building the app
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var jwtKey = jwtSettings["Key"];
-if (string.IsNullOrEmpty(jwtKey))
-{
-    throw new InvalidOperationException("JWT Key is missing in configuration.");
-}
-var key = Encoding.ASCII.GetBytes(jwtKey);
-
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.RequireHttpsMetadata = false;
-    options.SaveToken = true;
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(key)
-    };
-
-    // Extract token from cookie instead of Authorization header
-    options.Events = new JwtBearerEvents
-    {
-        OnMessageReceived = context =>
+        options.AddPolicy("AllowFrontend", policy =>
         {
-            var token = context.Request.Cookies["jwt_token"];
-            if (!string.IsNullOrEmpty(token))
+            policy.WithOrigins(corsOrigin)
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials();
+        });
+    });
+
+    // JWT Token - Configure BEFORE building the app
+    var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+    var jwtKey = jwtSettings["Key"];
+    if (string.IsNullOrEmpty(jwtKey))
+    {
+        throw new InvalidOperationException("JWT Key is missing in configuration.");
+    }
+    var key = Encoding.ASCII.GetBytes(jwtKey);
+
+    builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.RequireHttpsMetadata = false;
+        options.SaveToken = true;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(key)
+        };
+
+        // Extract token from cookie instead of Authorization header
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
             {
-                context.Token = token;
+                var token = context.Request.Cookies["jwt_token"];
+                if (!string.IsNullOrEmpty(token))
+                {
+                    context.Token = token;
+                }
+                return Task.CompletedTask;
             }
-            return Task.CompletedTask;
-        }
-    };
-});
+        };
+    });
 
-var app = builder.Build();
+    var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-app.UseExceptionHandler();
+    // Configure the HTTP request pipeline.
+    app.UseExceptionHandler();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    // Add Serilog request logging
+    app.UseSerilogRequestLogging();
+
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
+
+    // Use CORS before other middleware that uses endpoints
+    app.UseCors("AllowFrontend");
+
+    app.UseHttpsRedirection();
+
+    // Use Authentication before Authorization
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    app.MapControllers();
+
+    Log.Information("NotiBlock API started successfully");
+    app.Run();
 }
-
-// Use CORS before other middleware that uses endpoints
-app.UseCors("AllowFrontend");
-
-app.UseHttpsRedirection();
-
-// Use Authentication before Authorization
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapControllers();
-
-app.Run();
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application failed to start");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
 

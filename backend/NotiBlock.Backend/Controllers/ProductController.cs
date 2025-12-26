@@ -1,7 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using NBitcoin.Secp256k1;
-using NotiBlock.Backend.Data;
 using NotiBlock.Backend.DTOs;
 using NotiBlock.Backend.Interfaces;
 using System.Security.Claims;
@@ -28,7 +26,8 @@ namespace NotiBlock.Backend.Controllers
         public async Task<IActionResult> Register([FromBody] ProductRegisterDTO dto)
         {
             var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var result = await _service.RegisterProductAsync(dto, userId);
+            var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+            var result = await _service.RegisterProductAsync(dto, userId, role);
             return Ok(result);
         }
 
@@ -41,16 +40,33 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpPut("{serialNumber}")]
-        public async Task<IActionResult> Update(string serialNumber, [FromBody] ProductRegisterDTO dto)
+        [Authorize(Roles = "manufacturer, reseller")]
+        public async Task<IActionResult> Update(string serialNumber, [FromBody] ProductUpdateDTO dto)
         {
-            var product = await _service.GetProductBySerialNumberAsync(serialNumber);
-            if (product == null) return NotFound();
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
-            var updatedProduct = await _service.UpdateProductAsync(serialNumber, dto);
-            return Ok(updatedProduct);
+                var updatedProduct = await _service.UpdateProductAsync(serialNumber, dto, userId, role);
+                return Ok(new { success = true, data = updatedProduct });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpDelete("{serialNumber}")]
+        [Authorize (Roles = "manufacturer")]
         public async Task<IActionResult> Delete(string serialNumber)
         {
             var product = await _service.GetProductBySerialNumberAsync(serialNumber);
@@ -59,7 +75,7 @@ namespace NotiBlock.Backend.Controllers
             var deleted = await _service.DeleteProductAsync(serialNumber);
             if (!deleted) return NotFound();
 
-            return NoContent();
+            return Content("Product deleted successfully");
         }
     }
 }

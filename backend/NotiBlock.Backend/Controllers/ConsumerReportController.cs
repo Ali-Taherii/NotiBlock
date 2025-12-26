@@ -18,7 +18,7 @@ namespace NotiBlock.Backend.Controllers
         {
             var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var report = await _service.SubmitReportAsync(dto, userId);
-            return Ok(report);
+            return Ok(ApiResponse<object>.SuccessResponse(report, "Report submitted successfully"));
         }
     }
 }

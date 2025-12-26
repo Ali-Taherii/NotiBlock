@@ -13,12 +13,12 @@ namespace NotiBlock.Backend.Controllers
         private readonly IProductService _service = service;
 
         [HttpPost("create")]
-        [Authorize(Roles ="manufacturer")]
+        [Authorize(Roles = "manufacturer")]
         public async Task<IActionResult> Create([FromBody] ProductCreateDTO dto)
         {
             var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var result = await _service.CreateProductAsync(dto, userId);
-            return Ok(result);
+            return Ok(ApiResponse<object>.SuccessResponse(result, "Product created successfully"));
         }
 
         [HttpPost("register")]
@@ -28,54 +28,43 @@ namespace NotiBlock.Backend.Controllers
             var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
             var result = await _service.RegisterProductAsync(dto, userId, role);
-            return Ok(result);
+            return Ok(ApiResponse<object>.SuccessResponse(result, "Product registered successfully"));
         }
 
         [HttpGet("{serialNumber}")]
         public async Task<IActionResult> GetBySerialNumber(string serialNumber)
         {
             var result = await _service.GetProductBySerialNumberAsync(serialNumber);
-            if (result == null) return NotFound();
-            return Ok(result);
+            if (result == null)
+                return NotFound(ApiResponse<object>.ErrorResponse("Product not found"));
+
+            return Ok(ApiResponse<object>.SuccessResponse(result));
         }
 
         [HttpPut("{serialNumber}")]
         [Authorize(Roles = "manufacturer, reseller")]
         public async Task<IActionResult> Update(string serialNumber, [FromBody] ProductUpdateDTO dto)
         {
-            try
-            {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
-                var updatedProduct = await _service.UpdateProductAsync(serialNumber, dto, userId, role);
-                return Ok(new { success = true, data = updatedProduct });
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Forbid(ex.Message);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { success = false, message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { success = false, message = ex.Message });
-            }
+            var updatedProduct = await _service.UpdateProductAsync(serialNumber, dto, userId, role);
+            return Ok(ApiResponse<object>.SuccessResponse(updatedProduct, "Product updated successfully"));
         }
 
         [HttpDelete("{serialNumber}")]
-        [Authorize (Roles = "manufacturer")]
+        [Authorize(Roles = "manufacturer")]
         public async Task<IActionResult> Delete(string serialNumber)
         {
             var product = await _service.GetProductBySerialNumberAsync(serialNumber);
-            if (product == null) return NotFound();
+            if (product == null)
+                return NotFound(ApiResponse.ErrorResponse("Product not found"));
 
             var deleted = await _service.DeleteProductAsync(serialNumber);
-            if (!deleted) return NotFound();
+            if (!deleted)
+                return NotFound(ApiResponse.ErrorResponse("Product could not be deleted"));
 
-            return Content("Product deleted successfully");
+            return Ok(ApiResponse.SuccessResponse("Product deleted successfully"));
         }
     }
 }

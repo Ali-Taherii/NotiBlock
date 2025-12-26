@@ -23,18 +23,31 @@ namespace NotiBlock.Backend.Services
             return product;
         }
 
-        public async Task<Product> RegisterProductAsync(ProductRegisterDTO dto, Guid registererId)
+        public async Task<Product> RegisterProductAsync(ProductRegisterDTO dto, Guid registererId, string role)
         {
-            var exists = await _context.Products.AnyAsync(p => p.SerialNumber == dto.SerialNumber);
-            if (exists) throw new Exception("Product already registered");
-
-            var product = new Product
+            var product = await _context.Products
+                .FirstOrDefaultAsync(p => p.SerialNumber == dto.SerialNumber) 
+                ?? throw new KeyNotFoundException("Product not found");
+            
+            if (role == "consumer")
             {
-                SerialNumber = dto.SerialNumber,
-                ManufacturerId = dto.ManufacturerId,
-            };
-
-            _context.Products.Add(product);
+                if (product.OwnerId.HasValue)
+                    throw new InvalidOperationException("Product already registered to a consumer");
+                
+                product.OwnerId = registererId;
+            }
+            else if (role == "reseller")
+            {
+                if (product.ResellerId.HasValue)
+                    throw new InvalidOperationException("Product already registered to a reseller");
+                
+                product.ResellerId = registererId;
+            }
+            else
+            {
+                throw new InvalidOperationException("Invalid role for registration");
+            }
+            
             await _context.SaveChangesAsync();
             return product;
         }
@@ -45,11 +58,28 @@ namespace NotiBlock.Backend.Services
             return product ?? throw new InvalidOperationException("Product not found");
         }
 
-        public async Task<Product> UpdateProductAsync(string serialNumber, ProductRegisterDTO dto)
+        public async Task<Product> UpdateProductAsync(string serialNumber, ProductUpdateDTO dto, Guid userId, string role)
         {
-            var product = await _context.Products.FirstOrDefaultAsync(p => p.SerialNumber == serialNumber) ?? throw new InvalidOperationException("Product not found");
-            product.SerialNumber = dto.SerialNumber;
-            product.ManufacturerId = dto.ManufacturerId;
+            var product = await _context.Products.FirstOrDefaultAsync(p => p.SerialNumber == serialNumber) 
+                ?? throw new KeyNotFoundException("Product not found");
+            
+            // Authorization: Only manufacturer who created it can update
+            if (role == "manufacturer" && product.ManufacturerId != userId)
+                throw new UnauthorizedAccessException("You can only update your own products");
+            
+            // Authorization: Only reseller who owns it can update
+            if (role == "reseller" && product.ResellerId != userId)
+                throw new UnauthorizedAccessException("You can only update products you own");
+            
+            // DO NOT allow changing serial number or manufacturer
+            // Only update allowed fields
+            product.Model = dto.Model;
+            
+            if (role == "manufacturer" && dto.ResellerId.HasValue)
+                product.ResellerId = dto.ResellerId;
+            
+            if (role == "reseller" && dto.OwnerId.HasValue)
+                product.OwnerId = dto.OwnerId;
 
             await _context.SaveChangesAsync();
             return product;

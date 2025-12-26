@@ -4,7 +4,6 @@
     public class ProductRegisterDTO
     {
         public string SerialNumber { get; set; } = string.Empty;
-        public Guid ManufacturerId { get; set; }
         // ResellerId or ConsumerId comes from JWT claims
     }
 }

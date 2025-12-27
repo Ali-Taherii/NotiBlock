@@ -50,7 +50,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Consumers");
+                    b.ToTable("Consumers", (string)null);
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ConsumerReport", b =>
@@ -88,7 +88,7 @@ namespace NotiBlock.Backend.Migrations
                     b.HasIndex("ConsumerId", "ProductId")
                         .IsUnique();
 
-                    b.ToTable("ConsumerReports");
+                    b.ToTable("ConsumerReports", (string)null);
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Manufacturer", b =>
@@ -118,7 +118,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Manufacturers");
+                    b.ToTable("Manufacturers", (string)null);
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Product", b =>
@@ -170,7 +170,7 @@ namespace NotiBlock.Backend.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("Products");
+                    b.ToTable("Products", (string)null);
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Recall", b =>
@@ -204,7 +204,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Recalls");
+                    b.ToTable("Recalls", (string)null);
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Regulator", b =>
@@ -234,7 +234,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Regulators");
+                    b.ToTable("Regulators", (string)null);
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Reseller", b =>
@@ -264,7 +264,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Resellers");
+                    b.ToTable("Resellers", (string)null);
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ResellerTicket", b =>
@@ -301,7 +301,7 @@ namespace NotiBlock.Backend.Migrations
                     b.HasIndex("ResellerId", "Category")
                         .IsUnique();
 
-                    b.ToTable("ResellerTickets");
+                    b.ToTable("ResellerTickets", (string)null);
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ConsumerReport", b =>

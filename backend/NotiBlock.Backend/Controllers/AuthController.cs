@@ -271,6 +271,185 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
+        // Change Password
+        [Authorize]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDTO dto)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
+                await _service.ChangePasswordAsync(userId, role, dto);
+
+                _logger.LogInformation("Password changed successfully for user {UserId}", userId);
+
+                return Ok(ApiResponse.SuccessResponse("Password changed successfully"));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid password change request for user {UserId}", User.FindFirstValue(ClaimTypes.NameIdentifier));
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Password change failed for user {UserId}", User.FindFirstValue(ClaimTypes.NameIdentifier));
+                return Unauthorized(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "User not found for password change");
+                return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error changing password");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while changing password"));
+            }
+        }
+
+        // Update Profile
+        [Authorize]
+        [HttpPut("profile")]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDTO dto)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
+                var updatedUser = await _service.UpdateProfileAsync(userId, role, dto);
+
+                _logger.LogInformation("Profile updated for user {UserId}", userId);
+
+                return Ok(ApiResponse<object>.SuccessResponse(updatedUser, "Profile updated successfully"));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid profile update request");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "User not found for profile update");
+                return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating profile");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while updating profile"));
+            }
+        }
+
+        // Check Email Availability
+        [HttpGet("check-email")]
+        public async Task<IActionResult> CheckEmailAvailability([FromQuery] string email, [FromQuery] string userType)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(email))
+                    return BadRequest(ApiResponse<object>.ErrorResponse("Email is required"));
+
+                if (string.IsNullOrWhiteSpace(userType))
+                    return BadRequest(ApiResponse<object>.ErrorResponse("User type is required"));
+
+                var isAvailable = await _service.IsEmailAvailableAsync(email, userType);
+
+                return Ok(ApiResponse<object>.SuccessResponse(new { available = isAvailable }, "Email availability checked"));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid email availability check request");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking email availability");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while checking email"));
+            }
+        }
+
+        // Get User Statistics (for dashboard)
+        [Authorize]
+        [HttpGet("stats")]
+        public async Task<IActionResult> GetUserStats()
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
+                var stats = await _service.GetUserStatsAsync(userId, role);
+
+                _logger.LogInformation("User stats retrieved for {UserId}", userId);
+
+                return Ok(ApiResponse<object>.SuccessResponse(stats, "Statistics retrieved successfully"));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid user stats request");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving user statistics");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving statistics"));
+            }
+        }
+
+        // Delete Account (soft delete)
+        [Authorize]
+        [HttpDelete("account")]
+        public async Task<IActionResult> DeleteAccount([FromBody] DeleteAccountDTO dto)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
+                await _service.DeleteAccountAsync(userId, role, dto.Password);
+
+                _logger.LogInformation("Account deleted for user {UserId}", userId);
+
+                // Clear cookie
+                Response.Cookies.Append("jwt_token", "", new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.None,
+                    Expires = DateTime.UtcNow.AddDays(-1)
+                });
+
+                return Ok(ApiResponse.SuccessResponse("Account deleted successfully"));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid account deletion request");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Account deletion failed for user {UserId}", User.FindFirstValue(ClaimTypes.NameIdentifier));
+                return Unauthorized(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Account deletion not allowed");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "User not found for account deletion");
+                return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting account");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while deleting account"));
+            }
+        }
+
         // Logout
         [HttpPost("logout")]
         public IActionResult Logout()

@@ -1,6 +1,6 @@
 namespace NotiBlock.Backend.DTOs
 {
-    public class PagedResult<T>
+    public class PagedResultsDTO<T>
     {
         public List<T> Items { get; set; } = [];
         public int TotalCount { get; set; }

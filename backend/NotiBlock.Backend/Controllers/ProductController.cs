@@ -172,7 +172,7 @@ namespace NotiBlock.Backend.Controllers
                 var result = await _service.GetManufacturerProductsAsync(userId, page, pageSize);
 
                 _logger.LogInformation("Manufacturer {UserId} retrieved their products (Page {Page})", userId, page);
-                return Ok(ApiResponse<PagedResult<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
+                return Ok(ApiResponse<PagedResultsDTO<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
             }
             catch (Exception ex)
             {
@@ -191,7 +191,7 @@ namespace NotiBlock.Backend.Controllers
                 var result = await _service.GetResellerProductsAsync(userId, page, pageSize);
 
                 _logger.LogInformation("Reseller {UserId} retrieved their products (Page {Page})", userId, page);
-                return Ok(ApiResponse<PagedResult<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
+                return Ok(ApiResponse<PagedResultsDTO<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
             }
             catch (Exception ex)
             {
@@ -210,7 +210,7 @@ namespace NotiBlock.Backend.Controllers
                 var result = await _service.GetConsumerProductsAsync(userId, page, pageSize);
 
                 _logger.LogInformation("Consumer {UserId} retrieved their products (Page {Page})", userId, page);
-                return Ok(ApiResponse<PagedResult<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
+                return Ok(ApiResponse<PagedResultsDTO<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
             }
             catch (Exception ex)
             {

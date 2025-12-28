@@ -27,14 +27,13 @@ namespace NotiBlock.Backend.Interfaces
 
         // Common Auth Methods
         Task ChangePasswordAsync(Guid userId, string role, ChangePasswordDTO dto);
-        //Task RequestPasswordResetAsync(string email, string userType);
-        //Task ResetPasswordAsync(ResetPasswordDTO dto);
         Task<object> UpdateProfileAsync(Guid userId, string role, UpdateProfileDTO dto);
-
         Task DeleteAccountAsync(Guid userId, string role, string password);
-        //Task VerifyEmailAsync(string token);
         Task<bool> IsEmailAvailableAsync(string email, string userType);
         Task<object> GetUserStatsAsync(Guid userId, string role);
 
+        //Task RequestPasswordResetAsync(string email, string userType);
+        //Task ResetPasswordAsync(ResetPasswordDTO dto);
+        //Task VerifyEmailAsync(string token);
     }
 }

@@ -66,6 +66,26 @@ namespace NotiBlock.Backend.Data
             modelBuilder.Entity<ResellerTicket>()
                 .HasIndex(t => new { t.ResellerId, t.Category })
                 .IsUnique();
+
+            // Global query filter for soft delete - Consumers
+            modelBuilder.Entity<Consumer>()
+                .HasQueryFilter(c => !c.IsDeleted);
+
+            // Global query filter for soft delete - Resellers
+            modelBuilder.Entity<Reseller>()
+                .HasQueryFilter(r => !r.IsDeleted);
+
+            // Global query filter for soft delete - Manufacturers
+            modelBuilder.Entity<Manufacturer>()
+                .HasQueryFilter(m => !m.IsDeleted);
+
+            // Global query filter for soft delete - Regulators
+            modelBuilder.Entity<Regulator>()
+                .HasQueryFilter(r => !r.IsDeleted);
+
+            // Apply same to Products if needed
+            modelBuilder.Entity<Product>()
+                .HasQueryFilter(p => !p.IsDeleted);
         }
     }
 }

@@ -31,8 +31,20 @@ namespace NotiBlock.Backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Email")
                         .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Name")
                         .HasColumnType("text");
@@ -50,7 +62,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Consumers", (string)null);
+                    b.ToTable("Consumers");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ConsumerReport", b =>
@@ -88,7 +100,7 @@ namespace NotiBlock.Backend.Migrations
                     b.HasIndex("ConsumerId", "ProductId")
                         .IsUnique();
 
-                    b.ToTable("ConsumerReports", (string)null);
+                    b.ToTable("ConsumerReports");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Manufacturer", b =>
@@ -104,9 +116,21 @@ namespace NotiBlock.Backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
@@ -118,7 +142,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Manufacturers", (string)null);
+                    b.ToTable("Manufacturers");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Product", b =>
@@ -170,7 +194,7 @@ namespace NotiBlock.Backend.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("Products", (string)null);
+                    b.ToTable("Products");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Recall", b =>
@@ -188,8 +212,8 @@ namespace NotiBlock.Backend.Migrations
                     b.Property<DateTime>("IssuedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("ManufacturerId")
-                        .HasColumnType("integer");
+                    b.Property<Guid>("ManufacturerId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ProductId")
                         .IsRequired()
@@ -204,7 +228,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Recalls", (string)null);
+                    b.ToTable("Recalls");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Regulator", b =>
@@ -220,9 +244,21 @@ namespace NotiBlock.Backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
@@ -234,7 +270,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Regulators", (string)null);
+                    b.ToTable("Regulators");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Reseller", b =>
@@ -250,9 +286,21 @@ namespace NotiBlock.Backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
@@ -264,7 +312,7 @@ namespace NotiBlock.Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Resellers", (string)null);
+                    b.ToTable("Resellers");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ResellerTicket", b =>
@@ -301,7 +349,7 @@ namespace NotiBlock.Backend.Migrations
                     b.HasIndex("ResellerId", "Category")
                         .IsUnique();
 
-                    b.ToTable("ResellerTickets", (string)null);
+                    b.ToTable("ResellerTickets");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ConsumerReport", b =>

@@ -12,6 +12,12 @@ namespace NotiBlock.Backend.Models
         public string PasswordHash { get; set; } = string.Empty;
         public string WalletAddress { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public DateTime LastUpdatedAt { get; set; } = DateTime.UtcNow;
+        public bool IsDeleted { get; set; } = false;
+        public DateTime? DeletedAt { get; set; }
+        public Guid? DeletedBy { get; set; }
+
     }
 
 }

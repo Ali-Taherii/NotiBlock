@@ -15,7 +15,58 @@ namespace NotiBlock.Backend.Services
         private readonly ILogger<AuthService> _logger = logger;
         private readonly PasswordHasher<object> _hasher = new();
 
-        // Consumer Auth
+        #region Registration/Login
+
+        // ==================== GENERIC REGISTRATION ====================
+        private async Task<string> RegisterUserAsync<T>(
+            AuthRegisterDTO dto, 
+            string role,
+            Func<AuthRegisterDTO, T> userFactory,
+            Func<string, Task<bool>> emailExistsCheck) where T : class
+        {
+            // Validate email
+            if (string.IsNullOrWhiteSpace(dto.Email))
+            {
+                _logger.LogWarning("{Role} registration attempted with empty email", role);
+                throw new ArgumentException("Email is required");
+            }
+
+            // Validate password
+            if (string.IsNullOrWhiteSpace(dto.Password))
+            {
+                _logger.LogWarning("{Role} registration attempted with empty password", role);
+                throw new ArgumentException("Password is required");
+            }
+
+            // Validate name (required for non-consumer roles)
+            if (role != "consumer" && string.IsNullOrWhiteSpace(dto.Name))
+            {
+                _logger.LogWarning("{Role} registration attempted with empty name", role);
+                throw new ArgumentException($"{role} name is required");
+            }
+
+            // Check for duplicate email
+            if (await emailExistsCheck(dto.Email))
+            {
+                _logger.LogWarning("{Role} registration attempted with duplicate email: {Email}", role, dto.Email);
+                throw new InvalidOperationException("An error has occurred");
+            }
+
+            // Create user
+            var user = userFactory(dto);
+            _context.Set<T>().Add(user);
+            await _context.SaveChangesAsync();
+
+            // Extract user data for JWT
+            var userId = (Guid)user.GetType().GetProperty("Id")!.GetValue(user)!;
+            var email = (string)user.GetType().GetProperty("Email")!.GetValue(user)!;
+
+            _logger.LogInformation("{Role} registered successfully: {Email} with ID {UserId}", role, email, userId);
+
+            return JwtTokenGenerator.Generate(userId, email, role, _config);
+        }
+
+        // Consumer Registration
         public async Task<string> RegisterConsumerAsync(AuthRegisterDTO dto)
         {
             if (string.IsNullOrWhiteSpace(dto.Email))
@@ -30,284 +81,168 @@ namespace NotiBlock.Backend.Services
                 throw new ArgumentException("Password is required");
             }
 
-            if (await _context.Consumers.AnyAsync(c => c.Email == dto.Email))
-            {
-                _logger.LogWarning("Consumer registration attempted with duplicate email: {Email}", dto.Email);
-                throw new InvalidOperationException("An error has occured");
-            }
+            ValidatePassword(dto.Password);
 
-            var consumer = new Consumer
-            {
-                Id = Guid.NewGuid(),
-                Name = dto.Name?.Trim(),
-                Email = dto.Email.Trim().ToLowerInvariant(),
-                PhoneNumber = dto.PhoneNumber?.Trim(),
-                WalletAddress = dto.WalletAddress?.Trim() ?? string.Empty,
-                PasswordHash = _hasher.HashPassword(new object(), dto.Password),
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Consumers.Add(consumer);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Consumer registered successfully: {Email} with ID {ConsumerId}", consumer.Email, consumer.Id);
-
-            return JwtTokenGenerator.Generate(consumer.Id, consumer.Email, "consumer", _config);
+            return await RegisterUserAsync(
+                dto,
+                "consumer",
+                d => new Consumer
+                {
+                    Id = Guid.NewGuid(),
+                    Name = d.Name?.Trim(),
+                    Email = d.Email.Trim().ToLowerInvariant(),
+                    PhoneNumber = d.PhoneNumber?.Trim(),
+                    WalletAddress = d.WalletAddress?.Trim() ?? string.Empty,
+                    PasswordHash = _hasher.HashPassword(new object(), d.Password),
+                    CreatedAt = DateTime.UtcNow
+                },
+                async email => await _context.Consumers.AnyAsync(c => c.Email == email.ToLowerInvariant())
+            );
         }
 
-        public async Task<string> LoginConsumerAsync(AuthLoginDTO dto)
-        {
-            if (string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.Password))
-            {
-                _logger.LogWarning("Consumer login attempted with missing credentials");
-                throw new ArgumentException("Email and password are required");
-            }
-
-            var user = await _context.Consumers.FirstOrDefaultAsync(c => c.Email == dto.Email.ToLowerInvariant());
-            
-            if (user == null)
-            {
-                _logger.LogWarning("Consumer login failed: user not found for email {Email}", dto.Email);
-                throw new UnauthorizedAccessException("Invalid email or password");
-            }
-
-            var result = _hasher.VerifyHashedPassword(new object(), user.PasswordHash, dto.Password);
-            
-            if (result == PasswordVerificationResult.Failed)
-            {
-                _logger.LogWarning("Consumer login failed: incorrect password for email {Email}", dto.Email);
-                throw new UnauthorizedAccessException("Invalid email or password");
-            }
-
-            _logger.LogInformation("Consumer logged in successfully: {Email}", user.Email);
-
-            return JwtTokenGenerator.Generate(user.Id, user.Email!, "consumer", _config);
-        }
-
-        // Reseller Auth
+        // Reseller Registration
         public async Task<string> RegisterResellerAsync(AuthRegisterDTO dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.Email))
-            {
-                _logger.LogWarning("Reseller registration attempted with empty email");
-                throw new ArgumentException("Email is required");
-            }
-
-            if (string.IsNullOrWhiteSpace(dto.Password))
-            {
-                _logger.LogWarning("Reseller registration attempted with empty password");
-                throw new ArgumentException("Password is required");
-            }
-
-            if (string.IsNullOrWhiteSpace(dto.Name))
-            {
-                _logger.LogWarning("Reseller registration attempted with empty company name");
-                throw new ArgumentException("Company name is required");
-            }
-
-            if (await _context.Resellers.AnyAsync(r => r.Email == dto.Email))
-            {
-                _logger.LogWarning("Reseller registration attempted with duplicate email: {Email}", dto.Email);
-                throw new InvalidOperationException("An error has occured");
-            }
-
-            var reseller = new Reseller
-            {
-                Id = Guid.NewGuid(),
-                CompanyName = dto.Name.Trim(),
-                Email = dto.Email.Trim().ToLowerInvariant(),
-                WalletAddress = dto.WalletAddress?.Trim() ?? string.Empty,
-                PasswordHash = _hasher.HashPassword(new object(), dto.Password),
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Resellers.Add(reseller);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Reseller registered successfully: {Email} ({CompanyName}) with ID {ResellerId}", 
-                reseller.Email, reseller.CompanyName, reseller.Id);
-
-            return JwtTokenGenerator.Generate(reseller.Id, reseller.Email, "reseller", _config);
+            return await RegisterUserAsync(
+                dto,
+                "reseller",
+                d => new Reseller
+                {
+                    Id = Guid.NewGuid(),
+                    CompanyName = d.Name.Trim(),
+                    Email = d.Email.Trim().ToLowerInvariant(),
+                    WalletAddress = d.WalletAddress?.Trim() ?? string.Empty,
+                    PasswordHash = _hasher.HashPassword(new object(), d.Password),
+                    CreatedAt = DateTime.UtcNow
+                },
+                async email => await _context.Resellers.AnyAsync(r => r.Email == email.ToLowerInvariant())
+            );
         }
 
-        public async Task<string> LoginResellerAsync(AuthLoginDTO dto)
-        {
-            if (string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.Password))
-            {
-                _logger.LogWarning("Reseller login attempted with missing credentials");
-                throw new ArgumentException("Email and password are required");
-            }
-
-            var user = await _context.Resellers.FirstOrDefaultAsync(r => r.Email == dto.Email.ToLowerInvariant());
-            
-            if (user == null)
-            {
-                _logger.LogWarning("Reseller login failed: user not found for email {Email}", dto.Email);
-                throw new UnauthorizedAccessException("Invalid email or password");
-            }
-
-            var result = _hasher.VerifyHashedPassword(new object(), user.PasswordHash, dto.Password);
-            
-            if (result == PasswordVerificationResult.Failed)
-            {
-                _logger.LogWarning("Reseller login failed: incorrect password for email {Email}", dto.Email);
-                throw new UnauthorizedAccessException("Invalid email or password");
-            }
-
-            _logger.LogInformation("Reseller logged in successfully: {Email} ({CompanyName})", user.Email, user.CompanyName);
-
-            return JwtTokenGenerator.Generate(user.Id, user.Email!, "reseller", _config);
-        }
-
-        // Manufacturer Auth
+        // Manufacturer Registration
         public async Task<string> RegisterManufacturerAsync(AuthRegisterDTO dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.Email))
-            {
-                _logger.LogWarning("Manufacturer registration attempted with empty email");
-                throw new ArgumentException("Email is required");
-            }
-
-            if (string.IsNullOrWhiteSpace(dto.Password))
-            {
-                _logger.LogWarning("Manufacturer registration attempted with empty password");
-                throw new ArgumentException("Password is required");
-            }
-
-            if (string.IsNullOrWhiteSpace(dto.Name))
-            {
-                _logger.LogWarning("Manufacturer registration attempted with empty company name");
-                throw new ArgumentException("Company name is required");
-            }
-
-            if (await _context.Manufacturers.AnyAsync(m => m.Email == dto.Email))
-            {
-                _logger.LogWarning("Manufacturer registration attempted with duplicate email: {Email}", dto.Email);
-                throw new InvalidOperationException("An error has occured");
-            }
-
-            var manufacturer = new Manufacturer
-            {
-                Id = Guid.NewGuid(),
-                CompanyName = dto.Name.Trim(),
-                Email = dto.Email.Trim().ToLowerInvariant(),
-                WalletAddress = dto.WalletAddress?.Trim() ?? string.Empty,
-                PasswordHash = _hasher.HashPassword(new object(), dto.Password),
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Manufacturers.Add(manufacturer);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Manufacturer registered successfully: {Email} ({CompanyName}) with ID {ManufacturerId}", 
-                manufacturer.Email, manufacturer.CompanyName, manufacturer.Id);
-
-            return JwtTokenGenerator.Generate(manufacturer.Id, manufacturer.Email, "manufacturer", _config);
+            return await RegisterUserAsync(
+                dto,
+                "manufacturer",
+                d => new Manufacturer
+                {
+                    Id = Guid.NewGuid(),
+                    CompanyName = d.Name.Trim(),
+                    Email = d.Email.Trim().ToLowerInvariant(),
+                    WalletAddress = d.WalletAddress?.Trim() ?? string.Empty,
+                    PasswordHash = _hasher.HashPassword(new object(), d.Password),
+                    CreatedAt = DateTime.UtcNow
+                },
+                async email => await _context.Manufacturers.AnyAsync(m => m.Email == email.ToLowerInvariant())
+            );
         }
 
-        public async Task<string> LoginManufacturerAsync(AuthLoginDTO dto)
-        {
-            if (string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.Password))
-            {
-                _logger.LogWarning("Manufacturer login attempted with missing credentials");
-                throw new ArgumentException("Email and password are required");
-            }
-
-            var user = await _context.Manufacturers.FirstOrDefaultAsync(m => m.Email == dto.Email.ToLowerInvariant());
-            
-            if (user == null)
-            {
-                _logger.LogWarning("Manufacturer login failed: user not found for email {Email}", dto.Email);
-                throw new UnauthorizedAccessException("Invalid email or password");
-            }
-
-            var result = _hasher.VerifyHashedPassword(new object(), user.PasswordHash, dto.Password);
-            
-            if (result == PasswordVerificationResult.Failed)
-            {
-                _logger.LogWarning("Manufacturer login failed: incorrect password for email {Email}", dto.Email);
-                throw new UnauthorizedAccessException("Invalid email or password");
-            }
-
-            _logger.LogInformation("Manufacturer logged in successfully: {Email} ({CompanyName})", user.Email, user.CompanyName);
-
-            return JwtTokenGenerator.Generate(user.Id, user.Email!, "manufacturer", _config);
-        }
-
-        // Regulator Auth
+        // Regulator Registration
         public async Task<string> RegisterRegulatorAsync(AuthRegisterDTO dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.Email))
-            {
-                _logger.LogWarning("Regulator registration attempted with empty email");
-                throw new ArgumentException("Email is required");
-            }
-
-            if (string.IsNullOrWhiteSpace(dto.Password))
-            {
-                _logger.LogWarning("Regulator registration attempted with empty password");
-                throw new ArgumentException("Password is required");
-            }
-
-            if (string.IsNullOrWhiteSpace(dto.Name))
-            {
-                _logger.LogWarning("Regulator registration attempted with empty agency name");
-                throw new ArgumentException("Agency name is required");
-            }
-
-            if (await _context.Regulators.AnyAsync(r => r.Email == dto.Email))
-            {
-                _logger.LogWarning("Regulator registration attempted with duplicate email: {Email}", dto.Email);
-                throw new InvalidOperationException("An error has occured");
-            }
-
-            var regulator = new Regulator
-            {
-                Id = Guid.NewGuid(),
-                AgencyName = dto.Name.Trim(),
-                Email = dto.Email.Trim().ToLowerInvariant(),
-                WalletAddress = dto.WalletAddress?.Trim() ?? string.Empty,
-                PasswordHash = _hasher.HashPassword(new object(), dto.Password),
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Regulators.Add(regulator);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Regulator registered successfully: {Email} ({AgencyName}) with ID {RegulatorId}", 
-                regulator.Email, regulator.AgencyName, regulator.Id);
-
-            return JwtTokenGenerator.Generate(regulator.Id, regulator.Email, "regulator", _config);
+            return await RegisterUserAsync(
+                dto,
+                "regulator",
+                d => new Regulator
+                {
+                    Id = Guid.NewGuid(),
+                    AgencyName = d.Name.Trim(),
+                    Email = d.Email.Trim().ToLowerInvariant(),
+                    WalletAddress = d.WalletAddress?.Trim() ?? string.Empty,
+                    PasswordHash = _hasher.HashPassword(new object(), d.Password),
+                    CreatedAt = DateTime.UtcNow
+                },
+                async email => await _context.Regulators.AnyAsync(r => r.Email == email.ToLowerInvariant())
+            );
         }
 
-        public async Task<string> LoginRegulatorAsync(AuthLoginDTO dto)
+        // ==================== GENERIC LOGIN ====================
+        private async Task<string> LoginUserAsync<T>(
+            AuthLoginDTO dto,
+            string role,
+            Func<string, Task<T?>> findUserByEmail,
+            Func<T, string> getPasswordHash) where T : class
         {
+            // Validate credentials
             if (string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.Password))
             {
-                _logger.LogWarning("Regulator login attempted with missing credentials");
+                _logger.LogWarning("{Role} login attempted with missing credentials", role);
                 throw new ArgumentException("Email and password are required");
             }
 
-            var user = await _context.Regulators.FirstOrDefaultAsync(r => r.Email.Equals(dto.Email, StringComparison.InvariantCultureIgnoreCase));
-            
+            // Find user
+            var user = await findUserByEmail(dto.Email.ToLowerInvariant());
+
             if (user == null)
             {
-                _logger.LogWarning("Regulator login failed: user not found for email {Email}", dto.Email);
+                _logger.LogWarning("{Role} login failed: user not found for email {Email}", role, dto.Email);
                 throw new UnauthorizedAccessException("Invalid email or password");
             }
 
-            var result = _hasher.VerifyHashedPassword(new object(), user.PasswordHash, dto.Password);
-            
+            // Verify password
+            var result = _hasher.VerifyHashedPassword(new object(), getPasswordHash(user), dto.Password);
+
             if (result == PasswordVerificationResult.Failed)
             {
-                _logger.LogWarning("Regulator login failed: incorrect password for email {Email}", dto.Email);
+                _logger.LogWarning("{Role} login failed: incorrect password for email {Email}", role, dto.Email);
                 throw new UnauthorizedAccessException("Invalid email or password");
             }
 
-            _logger.LogInformation("Regulator logged in successfully: {Email} ({AgencyName})", user.Email, user.AgencyName);
+            // Extract user data
+            var userId = (Guid)user.GetType().GetProperty("Id")!.GetValue(user)!;
+            var email = (string)user.GetType().GetProperty("Email")!.GetValue(user)!;
 
-            return JwtTokenGenerator.Generate(user.Id, user.Email!, "regulator", _config);
+            _logger.LogInformation("{Role} logged in successfully: {Email}", role, email);
+
+            return JwtTokenGenerator.Generate(userId, email, role, _config);
         }
+
+        // Consumer Login
+        public async Task<string> LoginConsumerAsync(AuthLoginDTO dto)
+        {
+            return await LoginUserAsync(
+                dto,
+                "consumer",
+                async email => await _context.Consumers.FirstOrDefaultAsync(c => c.Email == email),
+                user => user.PasswordHash
+            );
+        }
+
+        // Reseller Login
+        public async Task<string> LoginResellerAsync(AuthLoginDTO dto)
+        {
+            return await LoginUserAsync(
+                dto,
+                "reseller",
+                async email => await _context.Resellers.FirstOrDefaultAsync(r => r.Email == email),
+                user => user.PasswordHash
+            );
+        }
+
+        // Manufacturer Login
+        public async Task<string> LoginManufacturerAsync(AuthLoginDTO dto)
+        {
+            return await LoginUserAsync(
+                dto,
+                "manufacturer",
+                async email => await _context.Manufacturers.FirstOrDefaultAsync(m => m.Email == email),
+                user => user.PasswordHash
+            );
+        }
+
+        // Regulator Login
+        public async Task<string> LoginRegulatorAsync(AuthLoginDTO dto)
+        {
+            return await LoginUserAsync(
+                dto,
+                "regulator",
+                async email => await _context.Regulators.FirstOrDefaultAsync(r => r.Email == email),
+                user => user.PasswordHash
+            );
+        }
+
+        #endregion
 
         // Change Password
         public async Task ChangePasswordAsync(Guid userId, string role, ChangePasswordDTO dto)
@@ -330,11 +265,8 @@ namespace NotiBlock.Backend.Services
                 throw new ArgumentException("New password and confirmation do not match");
             }
 
-            if (dto.NewPassword.Length < 6)
-            {
-                _logger.LogWarning("Change password attempted with weak password");
-                throw new ArgumentException("New password must be at least 6 characters long");
-            }
+            // REPLACE OLD LENGTH CHECK WITH FULL VALIDATION
+            ValidatePassword(dto.NewPassword);
 
             object? user = role switch
             {
@@ -536,7 +468,7 @@ namespace NotiBlock.Backend.Services
                         .Where(p => p.OwnerId == userId)
                         .Select(p => p.Model)
                         .Distinct()
-                        .CountAsync(); // Simplified - you'd want to join with actual recalls
+                        .CountAsync(); // Simplified - I'll join with actual recalls
 
                     _logger.LogInformation("Stats retrieved for consumer {UserId}", userId);
 
@@ -646,53 +578,91 @@ namespace NotiBlock.Backend.Services
             switch (role)
             {
                 case "consumer":
-                    var consumer = (Consumer)user;
-                    consumer.Email = deletedEmail;
-                    consumer.Name = "Deleted User";
-                    consumer.PasswordHash = string.Empty;
-                    consumer.PhoneNumber = null;
-                    consumer.WalletAddress = string.Empty;
-                    _context.Consumers.Update(consumer);
-                    break;
+                    {
+                        var consumer = (Consumer)user;
+                        var hasProducts = await _context.Products.AnyAsync(p => p.OwnerId == userId);
+                        if (hasProducts)
+                        {
+                            _logger.LogWarning("Consumer {UserId} attempted to delete account with products in circulation", userId);
+                            throw new InvalidOperationException("Cannot delete account while products are in circulation. Contact support.");
+                        }
+                        consumer.Email = deletedEmail;
+                        consumer.Name = "Deleted User";
+                        consumer.PasswordHash = string.Empty;
+                        consumer.PhoneNumber = null;
+                        consumer.WalletAddress = string.Empty;
+                        consumer.IsDeleted = true;
+                        consumer.DeletedAt = deletedAt;
+                        consumer.DeletedBy = userId;
+                        _context.Consumers.Update(consumer);
+                        break;
+                    }
 
                 case "reseller":
-                    var reseller = (Reseller)user;
-                    reseller.Email = deletedEmail;
-                    reseller.CompanyName = "Deleted Company";
-                    reseller.PasswordHash = string.Empty;
-                    reseller.WalletAddress = string.Empty;
-                    _context.Resellers.Update(reseller);
-                    break;
+                    {
+                        var reseller = (Reseller)user;
+                        reseller.Email = deletedEmail;
+                        reseller.CompanyName = "Deleted Company";
+                        reseller.PasswordHash = string.Empty;
+                        reseller.WalletAddress = string.Empty;
+                        reseller.IsDeleted = true;
+                        reseller.DeletedAt = deletedAt;
+                        reseller.DeletedBy = userId;
+                        _context.Resellers.Update(reseller);
+                        break;
+                    }
 
                 case "manufacturer":
-                    var manufacturer = (Manufacturer)user;
-                    // Check if manufacturer has products in circulation
-                    var hasProducts = await _context.Products.AnyAsync(p => p.ManufacturerId == userId);
-                    if (hasProducts)
                     {
-                        _logger.LogWarning("Manufacturer {UserId} attempted to delete account with products in circulation", userId);
-                        throw new InvalidOperationException("Cannot delete account while products are in circulation. Contact support.");
+                        var manufacturer = (Manufacturer)user;
+                        // Check if manufacturer has products in circulation
+                        var hasProducts = await _context.Products.AnyAsync(p => p.ManufacturerId == userId);
+                        if (hasProducts)
+                        {
+                            _logger.LogWarning("Manufacturer {UserId} attempted to delete account with products in circulation", userId);
+                            throw new InvalidOperationException("Cannot delete account while products are in circulation. Contact support.");
+                        }
+                        manufacturer.Email = deletedEmail;
+                        manufacturer.CompanyName = "Deleted Company";
+                        manufacturer.PasswordHash = string.Empty;
+                        manufacturer.WalletAddress = string.Empty;
+                        manufacturer.IsDeleted = true;
+                        manufacturer.DeletedAt = deletedAt;
+                        manufacturer.DeletedBy = userId;
+                        _context.Manufacturers.Update(manufacturer);
+                        break;
                     }
-                    manufacturer.Email = deletedEmail;
-                    manufacturer.CompanyName = "Deleted Company";
-                    manufacturer.PasswordHash = string.Empty;
-                    manufacturer.WalletAddress = string.Empty;
-                    _context.Manufacturers.Update(manufacturer);
-                    break;
-
                 case "regulator":
-                    var regulator = (Regulator)user;
-                    regulator.Email = deletedEmail;
-                    regulator.AgencyName = "Deleted Agency";
-                    regulator.PasswordHash = string.Empty;
-                    regulator.WalletAddress = string.Empty;
-                    _context.Regulators.Update(regulator);
-                    break;
+                    {
+                        var regulator = (Regulator)user;
+                        regulator.Email = deletedEmail;
+                        regulator.AgencyName = "Deleted Agency";
+                        regulator.PasswordHash = string.Empty;
+                        regulator.WalletAddress = string.Empty;
+                        regulator.IsDeleted = true;
+                        regulator.DeletedAt = deletedAt;
+                        regulator.DeletedBy = userId;
+                        _context.Regulators.Update(regulator);
+                        break;
+                    }
             }
 
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Account soft deleted for user {UserId} with role {Role}", userId, role);
+        }
+
+
+        // PASSWORD VALIDATION HELPER
+        private void ValidatePassword(string password)
+        {
+            var (isValid, errorMessage) = PasswordValidator.Validate(password);
+            
+            if (!isValid)
+            {
+                _logger.LogWarning("Password validation failed: {ErrorMessage}", errorMessage);
+                throw new ArgumentException(errorMessage);
+            }
         }
     }
 }

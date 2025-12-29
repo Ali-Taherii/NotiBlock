@@ -18,7 +18,7 @@ namespace NotiBlock.Backend.Controllers
         {
             try
             {
-                var manufacturerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var manufacturerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
                 var recall = await _service.CreateRecallAsync(dto, manufacturerId);
 
                 // Issue recall to blockchain

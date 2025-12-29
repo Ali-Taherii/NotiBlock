@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotiBlock.Backend.DTOs;
-using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Models;
+using NotiBlock.Backend.Interfaces;
 using System.Security.Claims;
 
 namespace NotiBlock.Backend.Controllers
@@ -63,6 +63,50 @@ namespace NotiBlock.Backend.Controllers
             {
                 _logger.LogError(ex, "Error registering product");
                 return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while registering the product"));
+            }
+        }
+
+        [HttpPost("unregister")]
+        [Authorize(Roles = "manufacturer,reseller")]
+        public async Task<IActionResult> Unregister([FromBody] ProductUnregisterDTO dto)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+                var result = await _service.UnregisterProductAsync(dto, userId, role);
+                
+                string message = dto.Type == UnregisterType.RemoveReseller 
+                    ? "Reseller removed from product successfully" 
+                    : "Consumer removed from product successfully";
+                
+                _logger.LogInformation("Product unregistered successfully by user {UserId} with role {Role}", userId, role);
+                return Ok(ApiResponse<object>.SuccessResponse(result, message));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Unauthorized unregister attempt");
+                return StatusCode(403, ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Product not found for unregistration");
+                return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid unregister operation");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid unregister request");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error unregistering product");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while unregistering the product"));
             }
         }
 
@@ -161,7 +205,7 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
-        // list endpoints
+        // List endpoints
         [HttpGet("manufacturer/my-products")]
         [Authorize(Roles = "manufacturer")]
         public async Task<IActionResult> GetMyProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)

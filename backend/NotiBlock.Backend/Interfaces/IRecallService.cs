@@ -6,7 +6,7 @@ namespace NotiBlock.Backend.Interfaces
 {
     public interface IRecallService
     {
-        Task<Recall> CreateRecallAsync(RecallCreateDTO dto, int manufacturerId);
+        Task<Recall> CreateRecallAsync(RecallCreateDTO dto, Guid manufacturerId);
         Task<Recall> IssueRecallToBlockchainAsync(int recallId);
         Task<Recall> GetRecallByIdAsync(int id);
         Task<Recall> GetRecallByProductIdAsync(string productId);

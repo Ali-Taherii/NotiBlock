@@ -14,7 +14,7 @@ namespace NotiBlock.Backend.Services
     {
         private readonly AppDbContext _context = context;
 
-        public async Task<Recall> CreateRecallAsync(RecallCreateDTO dto, int manufacturerId)
+        public async Task<Recall> CreateRecallAsync(RecallCreateDTO dto, Guid manufacturerId)
         {
             var recall = new Recall
             {

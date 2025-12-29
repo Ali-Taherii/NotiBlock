@@ -90,6 +90,111 @@ namespace NotiBlock.Backend.Services
             return product;
         }
 
+        public async Task<Product> UnregisterProductAsync(ProductUnregisterDTO dto, Guid userId, string role)
+        {
+            if (string.IsNullOrWhiteSpace(dto.SerialNumber))
+                throw new ArgumentException("Serial number cannot be empty");
+
+            var product = await _context.Products
+                .FirstOrDefaultAsync(p => p.SerialNumber == dto.SerialNumber.Trim())
+                ?? throw new KeyNotFoundException($"Product with serial number {dto.SerialNumber} not found");
+
+            switch (dto.Type)
+            {
+                case UnregisterType.RemoveReseller:
+                    // Only manufacturers can remove reseller assignments
+                    if (role != RoleManufacturer)
+                    {
+                        _logger.LogWarning("Non-manufacturer {Role} {UserId} attempted to remove reseller from product {SerialNumber}",
+                            role, userId, dto.SerialNumber);
+                        throw new UnauthorizedAccessException("Only manufacturers can remove reseller assignments");
+                    }
+
+                    // Verify the manufacturer owns this product
+                    if (product.ManufacturerId != userId)
+                    {
+                        _logger.LogWarning("Manufacturer {UserId} attempted to unregister product {SerialNumber} owned by manufacturer {ManufacturerId}",
+                            userId, dto.SerialNumber, product.ManufacturerId);
+                        throw new UnauthorizedAccessException("You can only unregister products you created");
+                    }
+
+                    // Check if reseller is assigned
+                    if (!product.ResellerId.HasValue)
+                    {
+                        _logger.LogWarning("Attempted to remove reseller from product {SerialNumber} that has no reseller assigned",
+                            dto.SerialNumber);
+                        throw new InvalidOperationException("Product does not have a reseller assigned");
+                    }
+
+                    // Check if product has been sold to consumer
+                    if (product.OwnerId.HasValue)
+                    {
+                        _logger.LogWarning("Attempted to remove reseller from product {SerialNumber} that has already been sold to consumer",
+                            dto.SerialNumber);
+                        throw new InvalidOperationException("Cannot remove reseller from product that has been sold to a consumer");
+                    }
+
+                    var removedResellerId = product.ResellerId;
+                    product.ResellerId = null;
+                    product.RegisteredAt = DateTime.UtcNow;
+
+                    _logger.LogInformation("Product {SerialNumber} unregistered from reseller {ResellerId} by manufacturer {ManufacturerId}",
+                        dto.SerialNumber, removedResellerId, userId);
+                    break;
+
+                case UnregisterType.RemoveConsumer:
+                    // Both manufacturers and resellers can remove consumer assignments
+                    if (role == RoleManufacturer)
+                    {
+                        // Verify the manufacturer owns this product
+                        if (product.ManufacturerId != userId)
+                        {
+                            _logger.LogWarning("Manufacturer {UserId} attempted to unregister consumer from product {SerialNumber} owned by manufacturer {ManufacturerId}",
+                                userId, dto.SerialNumber, product.ManufacturerId);
+                            throw new UnauthorizedAccessException("You can only unregister products you created");
+                        }
+                    }
+                    else if (role == RoleReseller)
+                    {
+                        // Verify the reseller is assigned to this product
+                        if (product.ResellerId != userId)
+                        {
+                            _logger.LogWarning("Reseller {UserId} attempted to unregister consumer from product {SerialNumber} assigned to reseller {ResellerId}",
+                                userId, dto.SerialNumber, product.ResellerId);
+                            throw new UnauthorizedAccessException("You can only unregister products assigned to you");
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Invalid role {Role} attempted to remove consumer from product {SerialNumber}",
+                            role, dto.SerialNumber);
+                        throw new UnauthorizedAccessException("Only manufacturers and resellers can remove consumer assignments");
+                    }
+
+                    // Check if consumer is assigned
+                    if (!product.OwnerId.HasValue)
+                    {
+                        _logger.LogWarning("Attempted to remove consumer from product {SerialNumber} that has no consumer assigned",
+                            dto.SerialNumber);
+                        throw new InvalidOperationException("Product does not have a consumer assigned");
+                    }
+
+                    var removedOwnerId = product.OwnerId;
+                    product.OwnerId = null;
+                    product.RegisteredAt = DateTime.UtcNow;
+
+                    _logger.LogInformation("Product {SerialNumber} unregistered from consumer {ConsumerId} by {Role} {UserId}",
+                        dto.SerialNumber, removedOwnerId, role, userId);
+                    break;
+
+                default:
+                    throw new ArgumentException($"Invalid unregister type: {dto.Type}");
+            }
+
+            await _context.SaveChangesAsync();
+            return product;
+        }
+
         public async Task<Product> GetProductBySerialNumberAsync(string serialNumber)
         {
             if (string.IsNullOrWhiteSpace(serialNumber))
@@ -239,10 +344,9 @@ namespace NotiBlock.Backend.Services
             return true;
         }
 
-        // list methods
+        // List methods
         public async Task<PagedResultsDTO<Product>> GetManufacturerProductsAsync(Guid manufacturerId, int page, int pageSize)
         {
-            // Validate and normalize pagination parameters
             if (page < 1)
             {
                 _logger.LogWarning("Invalid page number {Page} requested, defaulting to 1", page);
@@ -279,7 +383,6 @@ namespace NotiBlock.Backend.Services
 
         public async Task<PagedResultsDTO<Product>> GetResellerProductsAsync(Guid resellerId, int page, int pageSize)
         {
-            // Validate and normalize pagination parameters
             if (page < 1)
             {
                 _logger.LogWarning("Invalid page number {Page} requested, defaulting to 1", page);
@@ -316,7 +419,6 @@ namespace NotiBlock.Backend.Services
 
         public async Task<PagedResultsDTO<Product>> GetConsumerProductsAsync(Guid consumerId, int page, int pageSize)
         {
-            // Validate and normalize pagination parameters
             if (page < 1)
             {
                 _logger.LogWarning("Invalid page number {Page} requested, defaulting to 1", page);

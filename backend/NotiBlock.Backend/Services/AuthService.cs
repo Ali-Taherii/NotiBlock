@@ -511,9 +511,9 @@ namespace NotiBlock.Backend.Services
 
                 case "regulator":
                     var pendingTicketsCount = await _context.ResellerTickets
-                        .CountAsync(t => t.Status == "submitted_to_regulator");
+                        .CountAsync(t => t.Status == TicketStatus.UnderReview);
                     var reviewedTicketsCount = await _context.ResellerTickets
-                        .CountAsync(t => t.Status == "approved_for_manufacturer" || t.Status == "rejected");
+                        .CountAsync(t => t.Status == TicketStatus.Approved || t.Status == TicketStatus.Rejected);
 
                     _logger.LogInformation("Stats retrieved for regulator {UserId}", userId);
 

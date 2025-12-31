@@ -3,32 +3,390 @@ using NotiBlock.Backend.Data;
 using NotiBlock.Backend.DTOs;
 using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Models;
+using Microsoft.Extensions.Logging;
 
 namespace NotiBlock.Backend.Services
 {
-    public class ResellerTicketService(AppDbContext context) : IResellerTicketService
+    public class ResellerTicketService(AppDbContext context, ILogger<ResellerTicketService> logger) : IResellerTicketService
     {
         private readonly AppDbContext _context = context;
+        private readonly ILogger<ResellerTicketService> _logger = logger;
 
         public async Task<ResellerTicket> CreateTicketAsync(ResellerTicketDTO dto, Guid resellerId)
         {
-            var exists = await _context.ResellerTickets.AnyAsync(t =>
-                t.ResellerId == resellerId &&
-                t.Category == dto.Category &&
-                t.Status == "pending");
+            // Check for duplicate open ticket with same category
+            var exists = await _context.ResellerTickets
+                .AnyAsync(t =>
+                    t.ResellerId == resellerId &&
+                    t.Category == dto.Category &&
+                    t.Status == TicketStatus.Pending);
 
-            if (exists) throw new Exception("An open ticket with this category already exists");
+            if (exists)
+            {
+                _logger.LogWarning("Reseller {ResellerId} attempted to create duplicate ticket with category {Category}",
+                    resellerId, dto.Category);
+                throw new InvalidOperationException($"An open ticket with category '{dto.Category}' already exists");
+            }
 
             var ticket = new ResellerTicket
             {
                 ResellerId = resellerId,
                 Category = dto.Category,
-                Description = dto.Description
+                Description = dto.Description,
+                Priority = dto.Priority,
+                Status = TicketStatus.Pending,
+                CreatedAt = DateTime.UtcNow
             };
 
             _context.ResellerTickets.Add(ticket);
             await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Ticket {TicketId} created by reseller {ResellerId} with category {Category}",
+                ticket.Id, resellerId, dto.Category);
+
             return ticket;
+        }
+
+        public async Task<ResellerTicket> GetTicketByIdAsync(Guid id)
+        {
+            var ticket = await _context.ResellerTickets
+                .Include(t => t.Reseller)
+                .Include(t => t.ApprovedBy)
+                .Include(t => t.ConsumerReports)
+                .FirstOrDefaultAsync(t => t.Id == id);
+
+            if (ticket == null)
+            {
+                _logger.LogWarning("Ticket not found: {TicketId}", id);
+                throw new KeyNotFoundException($"Ticket with ID {id} not found");
+            }
+
+            return ticket;
+        }
+
+        public async Task<ResellerTicket> UpdateTicketAsync(Guid id, ResellerTicketUpdateDTO dto, Guid resellerId)
+        {
+            var ticket = await _context.ResellerTickets
+                .FirstOrDefaultAsync(t => t.Id == id)
+                ?? throw new KeyNotFoundException($"Ticket with ID {id} not found");
+
+            // Authorization: Only the reseller who created it can update
+            if (ticket.ResellerId != resellerId)
+            {
+                _logger.LogWarning("Reseller {ResellerId} attempted to update ticket {TicketId} owned by reseller {OwnerId}",
+                    resellerId, id, ticket.ResellerId);
+                throw new UnauthorizedAccessException("You can only update your own tickets");
+            }
+
+            // Only allow updates if ticket is in Pending or Rejected status
+            if (ticket.Status != TicketStatus.Pending && ticket.Status != TicketStatus.Rejected)
+            {
+                _logger.LogWarning("Attempted to update ticket {TicketId} with status {Status}",
+                    id, ticket.Status);
+                throw new InvalidOperationException($"Cannot update ticket with status '{ticket.Status}'");
+            }
+
+            // Update allowed fields
+            ticket.Category = dto.Category;
+            ticket.Description = dto.Description;
+            ticket.Priority = dto.Priority;
+            ticket.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Ticket {TicketId} updated by reseller {ResellerId}",
+                id, resellerId);
+
+            return ticket;
+        }
+
+        public async Task<bool> DeleteTicketAsync(Guid id, Guid resellerId)
+        {
+            var ticket = await _context.ResellerTickets
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.Id == id);
+
+            if (ticket == null)
+            {
+                _logger.LogWarning("Reseller {ResellerId} attempted to delete non-existent ticket: {TicketId}",
+                    resellerId, id);
+                throw new KeyNotFoundException($"Ticket with ID {id} not found");
+            }
+
+            // Check if already deleted
+            if (ticket.IsDeleted)
+            {
+                _logger.LogWarning("Reseller {ResellerId} attempted to delete already deleted ticket: {TicketId}",
+                    resellerId, id);
+                throw new InvalidOperationException($"Ticket {id} is already deleted");
+            }
+
+            // Authorization: Only the reseller who created it can delete
+            if (ticket.ResellerId != resellerId)
+            {
+                _logger.LogWarning("Reseller {ResellerId} attempted to delete ticket {TicketId} owned by reseller {OwnerId}",
+                    resellerId, id, ticket.ResellerId);
+                throw new UnauthorizedAccessException("You can only delete your own tickets");
+            }
+
+            // Only allow deletion if ticket is Pending or Rejected
+            if (ticket.Status != TicketStatus.Pending && ticket.Status != TicketStatus.Rejected)
+            {
+                _logger.LogWarning("Attempted to delete ticket {TicketId} with status {Status}",
+                    id, ticket.Status);
+                throw new InvalidOperationException($"Cannot delete ticket with status '{ticket.Status}'");
+            }
+
+            // Perform soft delete
+            ticket.IsDeleted = true;
+            ticket.DeletedAt = DateTime.UtcNow;
+            ticket.DeletedBy = resellerId;
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Ticket {TicketId} soft deleted by reseller {ResellerId} at {DeletedAt}",
+                id, resellerId, ticket.DeletedAt);
+
+            return true;
+        }
+
+        public async Task<PagedResultsDTO<ResellerTicket>> GetResellerTicketsAsync(Guid resellerId, int page, int pageSize)
+        {
+            if (page < 1)
+            {
+                _logger.LogWarning("Invalid page number {Page} requested, defaulting to 1", page);
+                page = 1;
+            }
+
+            if (pageSize < 1 || pageSize > 100)
+            {
+                _logger.LogWarning("Invalid page size {PageSize} requested, defaulting to 20", pageSize);
+                pageSize = 20;
+            }
+
+            var query = _context.ResellerTickets
+                .Include(t => t.ApprovedBy)
+                .Where(t => t.ResellerId == resellerId)
+                .OrderByDescending(t => t.CreatedAt);
+
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            _logger.LogInformation("Retrieved {Count} tickets for reseller {ResellerId} (Page {Page} of {TotalPages})",
+                items.Count, resellerId, page, Math.Ceiling(totalCount / (double)pageSize));
+
+            return new PagedResultsDTO<ResellerTicket>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+
+        public async Task<PagedResultsDTO<ResellerTicket>> GetAllTicketsAsync(int page, int pageSize)
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+            var query = _context.ResellerTickets
+                .Include(t => t.Reseller)
+                .Include(t => t.ApprovedBy)
+                .OrderByDescending(t => t.Priority)
+                .ThenByDescending(t => t.CreatedAt);
+
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            _logger.LogInformation("Retrieved {Count} tickets (Page {Page})", items.Count, page);
+
+            return new PagedResultsDTO<ResellerTicket>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+
+        public async Task<PagedResultsDTO<ResellerTicket>> GetTicketsByStatusAsync(TicketStatus status, int page, int pageSize)
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+            var query = _context.ResellerTickets
+                .Include(t => t.Reseller)
+                .Include(t => t.ApprovedBy)
+                .Where(t => t.Status == status)
+                .OrderByDescending(t => t.Priority)
+                .ThenByDescending(t => t.CreatedAt);
+
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            _logger.LogInformation("Retrieved {Count} tickets with status {Status} (Page {Page})",
+                items.Count, status, page);
+
+            return new PagedResultsDTO<ResellerTicket>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+
+        public async Task<ResellerTicket> ProcessTicketActionAsync(Guid ticketId, TicketActionDTO dto, Guid regulatorId)
+        {
+            var ticket = await _context.ResellerTickets
+                .FirstOrDefaultAsync(t => t.Id == ticketId)
+                ?? throw new KeyNotFoundException($"Ticket with ID {ticketId} not found");
+
+            switch (dto.Action)
+            {
+                case TicketAction.Approve:
+                    if (ticket.Status != TicketStatus.Pending && ticket.Status != TicketStatus.UnderReview)
+                    {
+                        throw new InvalidOperationException($"Cannot approve ticket with status '{ticket.Status}'");
+                    }
+                    ticket.Status = TicketStatus.Approved;
+                    ticket.ApprovedById = regulatorId;
+                    ticket.ResolutionNotes = dto.ResolutionNotes;
+                    _logger.LogInformation("Ticket {TicketId} approved by regulator {RegulatorId}",
+                        ticketId, regulatorId);
+                    break;
+
+                case TicketAction.Reject:
+                    if (ticket.Status != TicketStatus.Pending && ticket.Status != TicketStatus.UnderReview)
+                    {
+                        throw new InvalidOperationException($"Cannot reject ticket with status '{ticket.Status}'");
+                    }
+                    ticket.Status = TicketStatus.Rejected;
+                    ticket.ApprovedById = regulatorId;
+                    ticket.ResolutionNotes = dto.ResolutionNotes;
+                    _logger.LogInformation("Ticket {TicketId} rejected by regulator {RegulatorId}",
+                        ticketId, regulatorId);
+                    break;
+
+                case TicketAction.Resolve:
+                    if (ticket.Status != TicketStatus.Approved)
+                    {
+                        throw new InvalidOperationException($"Cannot resolve ticket with status '{ticket.Status}'");
+                    }
+                    ticket.Status = TicketStatus.Resolved;
+                    ticket.ResolvedBy = regulatorId;
+                    ticket.ResolvedAt = DateTime.UtcNow;
+                    ticket.ResolutionNotes = dto.ResolutionNotes;
+                    _logger.LogInformation("Ticket {TicketId} resolved by regulator {RegulatorId}",
+                        ticketId, regulatorId);
+                    break;
+
+                case TicketAction.Close:
+                    if (ticket.Status != TicketStatus.Resolved)
+                    {
+                        throw new InvalidOperationException($"Cannot close ticket with status '{ticket.Status}'");
+                    }
+                    ticket.Status = TicketStatus.Closed;
+                    _logger.LogInformation("Ticket {TicketId} closed by regulator {RegulatorId}",
+                        ticketId, regulatorId);
+                    break;
+
+                case TicketAction.Reopen:
+                    if (ticket.Status != TicketStatus.Rejected && ticket.Status != TicketStatus.Closed)
+                    {
+                        throw new InvalidOperationException($"Cannot reopen ticket with status '{ticket.Status}'");
+                    }
+                    ticket.Status = TicketStatus.Pending;
+                    ticket.ResolutionNotes = null;
+                    _logger.LogInformation("Ticket {TicketId} reopened by regulator {RegulatorId}",
+                        ticketId, regulatorId);
+                    break;
+
+                default:
+                    throw new ArgumentException($"Invalid action: {dto.Action}");
+            }
+
+            ticket.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return ticket;
+        }
+
+        public async Task<object> GetTicketStatisticsAsync(Guid? resellerId = null)
+        {
+            var query = _context.ResellerTickets.AsQueryable();
+
+            if (resellerId.HasValue)
+            {
+                query = query.Where(t => t.ResellerId == resellerId.Value);
+            }
+
+            var stats = new
+            {
+                Total = await query.CountAsync(),
+                Pending = await query.CountAsync(t => t.Status == TicketStatus.Pending),
+                UnderReview = await query.CountAsync(t => t.Status == TicketStatus.UnderReview),
+                Approved = await query.CountAsync(t => t.Status == TicketStatus.Approved),
+                Rejected = await query.CountAsync(t => t.Status == TicketStatus.Rejected),
+                Resolved = await query.CountAsync(t => t.Status == TicketStatus.Resolved),
+                Closed = await query.CountAsync(t => t.Status == TicketStatus.Closed),
+                ByCategory = await query
+                    .GroupBy(t => t.Category)
+                    .Select(g => new { Category = g.Key.ToString(), Count = g.Count() })
+                    .ToListAsync(),
+                ByPriority = await query
+                    .GroupBy(t => t.Priority)
+                    .Select(g => new { Priority = g.Key, Count = g.Count() })
+                    .ToListAsync()
+            };
+
+            _logger.LogInformation("Ticket statistics retrieved for {Scope}",
+                resellerId.HasValue ? $"reseller {resellerId}" : "all tickets");
+
+            return stats;
+        }
+
+        public async Task<PagedResultsDTO<ResellerTicketReadableView>> GetReadableTicketsAsync(Guid? resellerId, int page, int pageSize)
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+            var query = _context.ResellerTicketsReadable.AsQueryable();
+
+            if (resellerId.HasValue)
+            {
+                query = query.Where(t => t.ResellerId == resellerId.Value);
+            }
+
+            // Order by priority and creation date
+            var orderedQuery = query
+                .OrderByDescending(t => t.PriorityCode)
+                .ThenByDescending(t => t.CreatedAt);
+
+            var totalCount = await orderedQuery.CountAsync();
+            var items = await orderedQuery
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            _logger.LogInformation("Retrieved {Count} readable tickets (Page {Page})", items.Count, page);
+
+            return new PagedResultsDTO<ResellerTicketReadableView>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
         }
     }
 }

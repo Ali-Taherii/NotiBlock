@@ -13,10 +13,17 @@ namespace NotiBlock.Backend.Data
         public DbSet<Product> Products => Set<Product>();
         public DbSet<ConsumerReport> ConsumerReports => Set<ConsumerReport>();
         public DbSet<ResellerTicket> ResellerTickets => Set<ResellerTicket>();
+        public DbSet<ResellerTicketReadableView> ResellerTicketsReadable => Set<ResellerTicketReadableView>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<ResellerTicketReadableView>(entity =>
+            {
+                entity.HasNoKey();
+                entity.ToView("vw_resellertickets_readable");
+            });
 
             // Global query filter for soft delete
             modelBuilder.Entity<Product>()

@@ -484,7 +484,7 @@ namespace NotiBlock.Backend.Services
                     var resellerProductsCount = await _context.Products.CountAsync(p => p.ResellerId == userId);
                     var resellerTicketsCount = await _context.ResellerTickets.CountAsync(t => t.ResellerId == userId);
                     var pendingReportsCount = await _context.ConsumerReports
-                        .CountAsync(r => r.Product.ResellerId == userId && r.Status == "pending");
+                        .CountAsync(r => r.Product != null && r.Product.ResellerId == userId && r.Status == ReportStatus.Pending);
 
                     _logger.LogInformation("Stats retrieved for reseller {UserId}", userId);
 

@@ -77,28 +77,53 @@ namespace NotiBlock.Backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid");
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid?>("ResellerTicketId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Status")
+                    b.Property<string>("ResolutionNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ResolvedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SerialNumber")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProductId");
-
                     b.HasIndex("ResellerTicketId");
 
-                    b.HasIndex("ConsumerId", "ProductId")
-                        .IsUnique();
+                    b.HasIndex("SerialNumber");
+
+                    b.HasIndex("ConsumerId", "SerialNumber")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false AND \"Status\" = 0");
 
                     b.ToTable("ConsumerReports");
                 });
@@ -371,9 +396,75 @@ namespace NotiBlock.Backend.Migrations
                     b.HasIndex("ApprovedById");
 
                     b.HasIndex("ResellerId", "Category")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false AND \"Status\" = 0");
 
                     b.ToTable("ResellerTickets");
+                });
+
+            modelBuilder.Entity("NotiBlock.Backend.Models.ResellerTicketReadableView", b =>
+                {
+                    b.Property<Guid?>("ApprovedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CategoryCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CategoryText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("PriorityCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PriorityText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ResellerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResolutionNotes")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ResolvedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StatusText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("vw_resellertickets_readable", (string)null);
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ConsumerReport", b =>
@@ -384,16 +475,17 @@ namespace NotiBlock.Backend.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("NotiBlock.Backend.Models.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("NotiBlock.Backend.Models.ResellerTicket", "ResellerTicket")
                         .WithMany("ConsumerReports")
                         .HasForeignKey("ResellerTicketId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("NotiBlock.Backend.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("SerialNumber")
+                        .HasPrincipalKey("SerialNumber")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Consumer");
 

@@ -19,29 +19,44 @@ namespace NotiBlock.Backend.Data
         {
             base.OnModelCreating(modelBuilder);
 
+            // ========== VIEWS ==========
+            
             modelBuilder.Entity<ResellerTicketReadableView>(entity =>
             {
                 entity.HasNoKey();
                 entity.ToView("vw_resellertickets_readable");
             });
 
-            // Global query filter for soft delete
+            // ========== GLOBAL QUERY FILTERS (SOFT DELETE) ==========
+            
             modelBuilder.Entity<Product>()
                 .HasQueryFilter(p => !p.IsDeleted);
 
+            modelBuilder.Entity<ConsumerReport>()
+                .HasQueryFilter(r => !r.IsDeleted);
+
+            modelBuilder.Entity<ResellerTicket>()
+                .HasQueryFilter(t => !t.IsDeleted);
+
+            modelBuilder.Entity<Consumer>()
+                .HasQueryFilter(c => !c.IsDeleted);
+
+            modelBuilder.Entity<Reseller>()
+                .HasQueryFilter(r => !r.IsDeleted);
+
+            modelBuilder.Entity<Manufacturer>()
+                .HasQueryFilter(m => !m.IsDeleted);
+
+            modelBuilder.Entity<Regulator>()
+                .HasQueryFilter(r => !r.IsDeleted);
+
+            // ========== PRODUCT CONFIGURATION ==========
+            
             // Unique: Product Serial Number (only for non-deleted products)
-            // PostgreSQL syntax for filtered index
             modelBuilder.Entity<Product>()
                 .HasIndex(p => p.SerialNumber)
                 .IsUnique()
-                .HasFilter("\"IsDeleted\" = false"); // PostgreSQL uses double quotes for identifiers
-
-            // One-to-many: Consumer owns many Products
-            modelBuilder.Entity<Product>()
-                .HasOne<Consumer>()
-                .WithMany()
-                .HasForeignKey(p => p.OwnerId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .HasFilter("\"IsDeleted\" = false");
 
             // One-to-many: Manufacturer makes many Products
             modelBuilder.Entity<Product>()
@@ -50,49 +65,50 @@ namespace NotiBlock.Backend.Data
                 .HasForeignKey(p => p.ManufacturerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Optional Reseller
+            // Optional: Reseller assigned to Product
             modelBuilder.Entity<Product>()
                 .HasOne<Reseller>()
                 .WithMany()
                 .HasForeignKey(p => p.ResellerId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // Unique constraint: one open report per consumer per product
-            modelBuilder.Entity<ConsumerReport>()
-                .HasIndex(r => new { r.ConsumerId, r.ProductId })
-                .IsUnique();
+            // Optional: Consumer owns Product
+            modelBuilder.Entity<Product>()
+                .HasOne<Consumer>()
+                .WithMany()
+                .HasForeignKey(p => p.OwnerId)
+                .OnDelete(DeleteBehavior.Restrict);
 
-            // One-to-many: Consumer reports linked to ResellerTicket
+            // ========== CONSUMER REPORT CONFIGURATION ==========
+            
+            // Configure relationship: ConsumerReport -> Product (by SerialNumber)
+            modelBuilder.Entity<ConsumerReport>()
+                .HasOne(r => r.Product)
+                .WithMany()
+                .HasForeignKey(r => r.SerialNumber)
+                .HasPrincipalKey(p => p.SerialNumber)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Unique constraint: one open report per consumer per product serial number
+            modelBuilder.Entity<ConsumerReport>()
+                .HasIndex(r => new { r.ConsumerId, r.SerialNumber })
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = false AND \"Status\" = 0"); // Only for non-deleted, pending reports
+
+            // One-to-many: ConsumerReport linked to ResellerTicket (when escalated)
             modelBuilder.Entity<ConsumerReport>()
                 .HasOne(r => r.ResellerTicket)
                 .WithMany(t => t.ConsumerReports)
                 .HasForeignKey(r => r.ResellerTicketId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // Resellers cannot have multiple open tickets with the same category
+            // ========== RESELLER TICKET CONFIGURATION ==========
+            
+            // Unique constraint: Resellers cannot have multiple open tickets with the same category
             modelBuilder.Entity<ResellerTicket>()
                 .HasIndex(t => new { t.ResellerId, t.Category })
-                .IsUnique();
-
-            // Global query filter for soft delete - Consumers
-            modelBuilder.Entity<Consumer>()
-                .HasQueryFilter(c => !c.IsDeleted);
-
-            // Global query filter for soft delete - Resellers
-            modelBuilder.Entity<Reseller>()
-                .HasQueryFilter(r => !r.IsDeleted);
-
-            // Global query filter for soft delete - Manufacturers
-            modelBuilder.Entity<Manufacturer>()
-                .HasQueryFilter(m => !m.IsDeleted);
-
-            // Global query filter for soft delete - Regulators
-            modelBuilder.Entity<Regulator>()
-                .HasQueryFilter(r => !r.IsDeleted);
-
-            // Apply same to Products if needed
-            modelBuilder.Entity<Product>()
-                .HasQueryFilter(p => !p.IsDeleted);
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = false AND \"Status\" = 0"); // Only for non-deleted, pending tickets
         }
     }
 }

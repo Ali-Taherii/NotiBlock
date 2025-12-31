@@ -16,7 +16,7 @@ namespace NotiBlock.Backend.Controllers
 
         [HttpPost]
         [Authorize(Roles = "reseller")]
-        public async Task<IActionResult> Create([FromBody] ResellerTicketDTO dto)
+        public async Task<IActionResult> Create([FromBody] ResellerTicketCreateDTO dto)
         {
             try
             {
@@ -193,7 +193,7 @@ namespace NotiBlock.Backend.Controllers
 
         [HttpPost("{id}/action")]
         [Authorize(Roles = "regulator")]
-        public async Task<IActionResult> ProcessAction(Guid id, [FromBody] TicketActionDTO dto)
+        public async Task<IActionResult> ProcessAction(Guid id, [FromBody] ResellerTicketActionDTO dto)
         {
             try
             {

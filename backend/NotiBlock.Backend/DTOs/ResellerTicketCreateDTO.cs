@@ -2,7 +2,7 @@
 
 namespace NotiBlock.Backend.DTOs
 {
-    public class ResellerTicketDTO
+    public class ResellerTicketCreateDTO
     {
         public TicketCategory Category { get; set; }
         public string Description { get; set; } = string.Empty;

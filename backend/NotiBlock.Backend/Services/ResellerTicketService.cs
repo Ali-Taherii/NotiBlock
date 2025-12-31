@@ -12,7 +12,7 @@ namespace NotiBlock.Backend.Services
         private readonly AppDbContext _context = context;
         private readonly ILogger<ResellerTicketService> _logger = logger;
 
-        public async Task<ResellerTicket> CreateTicketAsync(ResellerTicketDTO dto, Guid resellerId)
+        public async Task<ResellerTicket> CreateTicketAsync(ResellerTicketCreateDTO dto, Guid resellerId)
         {
             // Check for duplicate open ticket with same category
             var exists = await _context.ResellerTickets
@@ -245,7 +245,7 @@ namespace NotiBlock.Backend.Services
             };
         }
 
-        public async Task<ResellerTicket> ProcessTicketActionAsync(Guid ticketId, TicketActionDTO dto, Guid regulatorId)
+        public async Task<ResellerTicket> ProcessTicketActionAsync(Guid ticketId, ResellerTicketActionDTO dto, Guid regulatorId)
         {
             var ticket = await _context.ResellerTickets
                 .FirstOrDefaultAsync(t => t.Id == ticketId)

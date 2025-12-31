@@ -2,7 +2,7 @@
 
 namespace NotiBlock.Backend.DTOs
 {
-    public class TicketActionDTO
+    public class ResellerTicketActionDTO
     {
         [Required(ErrorMessage = "Action is required")]
         public TicketAction Action { get; set; }

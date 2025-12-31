@@ -281,7 +281,7 @@ namespace NotiBlock.Backend.Services
             };
         }
 
-        public async Task<ConsumerReport> ProcessReportActionAsync(Guid reportId, ReportActionDTO dto, Guid resellerId)
+        public async Task<ConsumerReport> ProcessReportActionAsync(Guid reportId, ConsumerReportActionDTO dto, Guid resellerId)
         {
             var report = await _context.ConsumerReports
                 .Include(r => r.Product)

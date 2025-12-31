@@ -231,7 +231,7 @@ namespace NotiBlock.Backend.Controllers
 
         [HttpPost("{id}/action")]
         [Authorize(Roles = "reseller")]
-        public async Task<IActionResult> ProcessAction(Guid id, [FromBody] ReportActionDTO dto)
+        public async Task<IActionResult> ProcessAction(Guid id, [FromBody] ConsumerReportActionDTO dto)
         {
             try
             {

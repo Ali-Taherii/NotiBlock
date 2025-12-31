@@ -3,7 +3,7 @@ using NotiBlock.Backend.Models;
 
 namespace NotiBlock.Backend.DTOs
 {
-    public class ReportActionDTO
+    public class ConsumerReportActionDTO
     {
         [Required(ErrorMessage = "Action is required")]
         public ReportAction Action { get; set; }

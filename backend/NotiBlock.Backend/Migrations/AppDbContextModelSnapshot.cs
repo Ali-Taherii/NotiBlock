@@ -224,34 +224,70 @@ namespace NotiBlock.Backend.Migrations
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Recall", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ActionRequired")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("IssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LastUpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("ManufacturerId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ProductId")
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProductSerialNumber")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Reason")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.Property<string>("TransactionHash")
-                        .HasColumnType("text");
+                        .HasMaxLength(66)
+                        .HasColumnType("character varying(66)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ManufacturerId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ProductSerialNumber");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("ProductSerialNumber", "Status", "IsDeleted");
 
                     b.ToTable("Recalls");
                 });
@@ -511,6 +547,23 @@ namespace NotiBlock.Backend.Migrations
                         .WithMany()
                         .HasForeignKey("ResellerId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("NotiBlock.Backend.Models.Recall", b =>
+                {
+                    b.HasOne("NotiBlock.Backend.Models.Manufacturer", "Manufacturer")
+                        .WithMany()
+                        .HasForeignKey("ManufacturerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("NotiBlock.Backend.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId");
+
+                    b.Navigation("Manufacturer");
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ResellerTicket", b =>

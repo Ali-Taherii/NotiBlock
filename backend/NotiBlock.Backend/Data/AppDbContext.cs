@@ -109,6 +109,30 @@ namespace NotiBlock.Backend.Data
                 .HasIndex(t => new { t.ResellerId, t.Category })
                 .IsUnique()
                 .HasFilter("\"IsDeleted\" = false AND \"Status\" = 0"); // Only for non-deleted, pending tickets
+
+            // ========== RECALL CONFIGURATION ==========
+            modelBuilder.Entity<Recall>(entity =>
+            {
+                // Index on ProductId for faster lookups
+                entity.HasIndex(r => r.ProductSerialNumber);
+
+                // Index on Status for filtering
+                entity.HasIndex(r => r.Status);
+
+                // Composite index for common query pattern
+                entity.HasIndex(r => new { r.ProductSerialNumber, r.Status, r.IsDeleted });
+
+                // Foreign key to Manufacturer
+                entity.HasOne(r => r.Manufacturer)
+                      .WithMany()
+                      .HasForeignKey(r => r.ManufacturerId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Global query filter for soft deletes
+            modelBuilder.Entity<Recall>().HasQueryFilter(r => !r.IsDeleted);
+
+
         }
     }
 }

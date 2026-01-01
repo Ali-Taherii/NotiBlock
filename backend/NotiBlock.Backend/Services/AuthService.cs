@@ -38,6 +38,9 @@ namespace NotiBlock.Backend.Services
                 throw new ArgumentException("Password is required");
             }
 
+            // APPLY PASSWORD POLICY TO ALL USER TYPES
+            ValidatePassword(dto.Password);
+
             // Validate name (required for non-consumer roles)
             if (role != "consumer" && string.IsNullOrWhiteSpace(dto.Name))
             {
@@ -155,6 +158,23 @@ namespace NotiBlock.Backend.Services
                 },
                 async email => await _context.Regulators.AnyAsync(r => r.Email == email.ToLowerInvariant())
             );
+        }
+
+        // ==================== HELPER METHOD ====================
+        /// <summary>
+        /// Validates password against security policy
+        /// </summary>
+        /// <param name="password">Password to validate</param>
+        /// <exception cref="ArgumentException">Thrown when password doesn't meet requirements</exception>
+        private void ValidatePassword(string password)
+        {
+            var (isValid, errorMessage) = PasswordValidator.Validate(password);
+            
+            if (!isValid)
+            {
+                _logger.LogWarning("Password validation failed: {ErrorMessage}", errorMessage);
+                throw new ArgumentException(errorMessage);
+            }
         }
 
         // ==================== GENERIC LOGIN ====================
@@ -650,19 +670,6 @@ namespace NotiBlock.Backend.Services
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Account soft deleted for user {UserId} with role {Role}", userId, role);
-        }
-
-
-        // PASSWORD VALIDATION HELPER
-        private void ValidatePassword(string password)
-        {
-            var (isValid, errorMessage) = PasswordValidator.Validate(password);
-            
-            if (!isValid)
-            {
-                _logger.LogWarning("Password validation failed: {ErrorMessage}", errorMessage);
-                throw new ArgumentException(errorMessage);
-            }
         }
     }
 }

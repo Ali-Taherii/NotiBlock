@@ -1,6 +1,6 @@
 ﻿using NotiBlock.Backend.Models;
 
-namespace NotiBlock.Backend.DTOs
+namespace NotiBlock.Backend.DTOs.Auth
 {
     public class ResetPasswordDTO
     {

@@ -1,7 +1,7 @@
 ﻿using NotiBlock.Backend.Models;
 using System.ComponentModel.DataAnnotations;
 
-namespace NotiBlock.Backend.DTOs
+namespace NotiBlock.Backend.DTOs.Recall
 {
     public class RecallUpdateDTO
     {

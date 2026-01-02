@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NotiBlock.Backend.Data;
-using NotiBlock.Backend.DTOs;
+using NotiBlock.Backend.DTOs.Auth;
 using NotiBlock.Backend.Helpers;
 using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Models;

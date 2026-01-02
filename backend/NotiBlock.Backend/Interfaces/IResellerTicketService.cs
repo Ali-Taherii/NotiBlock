@@ -17,11 +17,11 @@ namespace NotiBlock.Backend.Interfaces
         Task<PagedResultsDTO<ResellerTicket>> GetTicketsByStatusAsync(TicketStatus status, int page, int pageSize);
         Task<PagedResultsDTO<ResellerTicketReadableView>> GetReadableTicketsAsync(Guid? resellerId, int page, int pageSize);
 
-        // Regulator actions
-        Task<ResellerTicket> ProcessTicketActionAsync(Guid ticketId, ResellerTicketActionDTO dto, Guid regulatorId);
-
         // Statistics
         Task<object> GetTicketStatisticsAsync(Guid? resellerId = null);
+
+        // Link Consumer Reports to Ticket
+        Task<ResellerTicket> LinkConsumerReportsAsync(Guid ticketId, List<Guid> reportIds, Guid resellerId);
 
 
     }

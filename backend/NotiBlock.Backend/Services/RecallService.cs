@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using NotiBlock.Backend.Data;
-using NotiBlock.Backend.DTOs;
 using NotiBlock.Backend.Models;
 using NotiBlock.Backend.Interfaces;
+using NotiBlock.Backend.DTOs.Recall;
 
 namespace NotiBlock.Backend.Services
 {

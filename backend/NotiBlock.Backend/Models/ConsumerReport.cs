@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace NotiBlock.Backend.Models
 {
@@ -31,6 +32,7 @@ namespace NotiBlock.Backend.Models
 
         // Relationship to ResellerTicket
         public Guid? ResellerTicketId { get; set; }
+        [JsonIgnore]
         public ResellerTicket? ResellerTicket { get; set; }
 
         // Resolution tracking

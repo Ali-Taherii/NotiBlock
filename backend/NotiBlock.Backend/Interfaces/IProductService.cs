@@ -1,4 +1,5 @@
 ﻿using NotiBlock.Backend.DTOs;
+using NotiBlock.Backend.DTOs.Product;
 using NotiBlock.Backend.Models;
 
 namespace NotiBlock.Backend.Interfaces

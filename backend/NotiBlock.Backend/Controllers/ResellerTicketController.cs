@@ -37,6 +37,48 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
+        [HttpPost("{id}/link-reports")]
+        [Authorize(Roles = "reseller")]
+        public async Task<IActionResult> LinkReports(Guid id, [FromBody] LinkReportsToTicketDTO dto)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var ticket = await _service.LinkConsumerReportsAsync(id, dto.ReportIds, userId);
+
+                _logger.LogInformation("Reports linked to ticket {TicketId} by reseller {UserId}", id, userId);
+
+                return Ok(ApiResponse<object>.SuccessResponse(
+                    new
+                    {
+                        ticket.Id,
+                        ticket.Status,
+                        linkedReportsCount = dto.ReportIds.Count
+                    },
+                    $"{dto.ReportIds.Count} report(s) linked successfully"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Unauthorized link reports attempt");
+                return StatusCode(403, ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Ticket or reports not found");
+                return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid link reports operation");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error linking reports to ticket {TicketId}", id);
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while linking reports"));
+            }
+        }
+
         [HttpGet("{id}")]
         [Authorize(Roles = "reseller,regulator")]
         public async Task<IActionResult> GetById(Guid id)
@@ -191,34 +233,34 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
-        [HttpPost("{id}/action")]
-        [Authorize(Roles = "regulator")]
-        public async Task<IActionResult> ProcessAction(Guid id, [FromBody] ResellerTicketActionDTO dto)
-        {
-            try
-            {
-                var regulatorId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var ticket = await _service.ProcessTicketActionAsync(id, dto, regulatorId);
-                _logger.LogInformation("Ticket {TicketId} action {Action} processed by regulator {RegulatorId}",
-                    id, dto.Action, regulatorId);
-                return Ok(ApiResponse<object>.SuccessResponse(ticket, $"Ticket {dto.Action.ToString().ToLower()}ed successfully"));
-            }
-            catch (KeyNotFoundException ex)
-            {
-                _logger.LogWarning(ex, "Ticket not found for action: {TicketId}", id);
-                return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogWarning(ex, "Invalid action on ticket {TicketId}", id);
-                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing action on ticket {TicketId}", id);
-                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while processing the action"));
-            }
-        }
+        //[HttpPost("{id}/action")]
+        //[Authorize(Roles = "regulator")]
+        //public async Task<IActionResult> ProcessAction(Guid id, [FromBody] ResellerTicketActionDTO dto)
+        //{
+        //    try
+        //    {
+        //        var regulatorId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        //        var ticket = await _service.ProcessTicketActionAsync(id, dto, regulatorId);
+        //        _logger.LogInformation("Ticket {TicketId} action {Action} processed by regulator {RegulatorId}",
+        //            id, dto.Action, regulatorId);
+        //        return Ok(ApiResponse<object>.SuccessResponse(ticket, $"Ticket {dto.Action.ToString().ToLower()}ed successfully"));
+        //    }
+        //    catch (KeyNotFoundException ex)
+        //    {
+        //        _logger.LogWarning(ex, "Ticket not found for action: {TicketId}", id);
+        //        return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
+        //    }
+        //    catch (InvalidOperationException ex)
+        //    {
+        //        _logger.LogWarning(ex, "Invalid action on ticket {TicketId}", id);
+        //        return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error processing action on ticket {TicketId}", id);
+        //        return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while processing the action"));
+        //    }
+        //}
 
         [HttpGet("statistics")]
         [Authorize(Roles = "reseller,regulator")]

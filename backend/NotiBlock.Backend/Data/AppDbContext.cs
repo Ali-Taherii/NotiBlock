@@ -14,6 +14,7 @@ namespace NotiBlock.Backend.Data
         public DbSet<ConsumerReport> ConsumerReports => Set<ConsumerReport>();
         public DbSet<ResellerTicket> ResellerTickets => Set<ResellerTicket>();
         public DbSet<ResellerTicketReadableView> ResellerTicketsReadable => Set<ResellerTicketReadableView>();
+        public DbSet<RegulatorReview> RegulatorReviews => Set<RegulatorReview>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -133,6 +134,27 @@ namespace NotiBlock.Backend.Data
             modelBuilder.Entity<Recall>().HasQueryFilter(r => !r.IsDeleted);
 
 
+            // ========== REGULATOR REVIEW CONFIGURATION ==========
+            modelBuilder.Entity<RegulatorReview>()
+                .HasQueryFilter(r => !r.IsDeleted);
+
+            modelBuilder.Entity<RegulatorReview>()
+                .HasOne(r => r.Ticket)
+                .WithMany(t => t.RegulatorReviews)
+                .HasForeignKey(r => r.TicketId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<RegulatorReview>()
+                .HasOne(r => r.Regulator)
+                .WithMany()
+                .HasForeignKey(r => r.RegulatorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Prevent duplicate reviews for same ticket by same regulator
+            modelBuilder.Entity<RegulatorReview>()
+                .HasIndex(r => new { r.TicketId, r.RegulatorId })
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = false");
         }
     }
 }

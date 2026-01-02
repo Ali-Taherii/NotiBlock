@@ -67,6 +67,7 @@ try
     builder.Services.AddScoped<IProductService, ProductService>();
     builder.Services.AddScoped<IConsumerReportService, ConsumerReportService>();
     builder.Services.AddScoped<IResellerTicketService, ResellerTicketService>();
+    builder.Services.AddScoped<IRegulatorReviewService, RegulatorReviewService>();
 
     // Add CORS policy
     var corsOrigin = builder.Configuration.GetValue<string>("CorsSettings:AllowedOrigin") ?? "http://localhost:5173";

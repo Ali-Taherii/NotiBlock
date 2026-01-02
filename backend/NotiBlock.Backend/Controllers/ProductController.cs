@@ -4,6 +4,7 @@ using NotiBlock.Backend.DTOs;
 using NotiBlock.Backend.Models;
 using NotiBlock.Backend.Interfaces;
 using System.Security.Claims;
+using NotiBlock.Backend.DTOs.Product;
 
 namespace NotiBlock.Backend.Controllers
 {

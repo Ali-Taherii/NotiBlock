@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace NotiBlock.Backend.DTOs
+namespace NotiBlock.Backend.DTOs.Product
 {
     public class ProductUpdateDTO
     {

@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotiBlock.Backend.DTOs;
+using NotiBlock.Backend.DTOs.Auth;
 using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Models;
 using System.IdentityModel.Tokens.Jwt;

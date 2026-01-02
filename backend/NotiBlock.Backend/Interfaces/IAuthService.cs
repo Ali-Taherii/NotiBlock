@@ -1,5 +1,5 @@
 ﻿using NotiBlock.Backend.Models;
-using NotiBlock.Backend.DTOs;
+using NotiBlock.Backend.DTOs.Auth;
 
 namespace NotiBlock.Backend.Interfaces
 {

@@ -245,82 +245,6 @@ namespace NotiBlock.Backend.Services
             };
         }
 
-        public async Task<ResellerTicket> ProcessTicketActionAsync(Guid ticketId, ResellerTicketActionDTO dto, Guid regulatorId)
-        {
-            var ticket = await _context.ResellerTickets
-                .FirstOrDefaultAsync(t => t.Id == ticketId)
-                ?? throw new KeyNotFoundException($"Ticket with ID {ticketId} not found");
-
-            switch (dto.Action)
-            {
-                case TicketAction.Approve:
-                    if (ticket.Status != TicketStatus.Pending && ticket.Status != TicketStatus.UnderReview)
-                    {
-                        throw new InvalidOperationException($"Cannot approve ticket with status '{ticket.Status}'");
-                    }
-                    ticket.Status = TicketStatus.Approved;
-                    ticket.ApprovedById = regulatorId;
-                    ticket.ResolutionNotes = dto.ResolutionNotes;
-                    _logger.LogInformation("Ticket {TicketId} approved by regulator {RegulatorId}",
-                        ticketId, regulatorId);
-                    break;
-
-                case TicketAction.Reject:
-                    if (ticket.Status != TicketStatus.Pending && ticket.Status != TicketStatus.UnderReview)
-                    {
-                        throw new InvalidOperationException($"Cannot reject ticket with status '{ticket.Status}'");
-                    }
-                    ticket.Status = TicketStatus.Rejected;
-                    ticket.ApprovedById = regulatorId;
-                    ticket.ResolutionNotes = dto.ResolutionNotes;
-                    _logger.LogInformation("Ticket {TicketId} rejected by regulator {RegulatorId}",
-                        ticketId, regulatorId);
-                    break;
-
-                case TicketAction.Resolve:
-                    if (ticket.Status != TicketStatus.Approved)
-                    {
-                        throw new InvalidOperationException($"Cannot resolve ticket with status '{ticket.Status}'");
-                    }
-                    ticket.Status = TicketStatus.Resolved;
-                    ticket.ResolvedBy = regulatorId;
-                    ticket.ResolvedAt = DateTime.UtcNow;
-                    ticket.ResolutionNotes = dto.ResolutionNotes;
-                    _logger.LogInformation("Ticket {TicketId} resolved by regulator {RegulatorId}",
-                        ticketId, regulatorId);
-                    break;
-
-                case TicketAction.Close:
-                    if (ticket.Status != TicketStatus.Resolved)
-                    {
-                        throw new InvalidOperationException($"Cannot close ticket with status '{ticket.Status}'");
-                    }
-                    ticket.Status = TicketStatus.Closed;
-                    _logger.LogInformation("Ticket {TicketId} closed by regulator {RegulatorId}",
-                        ticketId, regulatorId);
-                    break;
-
-                case TicketAction.Reopen:
-                    if (ticket.Status != TicketStatus.Rejected && ticket.Status != TicketStatus.Closed)
-                    {
-                        throw new InvalidOperationException($"Cannot reopen ticket with status '{ticket.Status}'");
-                    }
-                    ticket.Status = TicketStatus.Pending;
-                    ticket.ResolutionNotes = null;
-                    _logger.LogInformation("Ticket {TicketId} reopened by regulator {RegulatorId}",
-                        ticketId, regulatorId);
-                    break;
-
-                default:
-                    throw new ArgumentException($"Invalid action: {dto.Action}");
-            }
-
-            ticket.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-
-            return ticket;
-        }
-
         public async Task<object> GetTicketStatisticsAsync(Guid? resellerId = null)
         {
             var query = _context.ResellerTickets.AsQueryable();
@@ -387,6 +311,118 @@ namespace NotiBlock.Backend.Services
                 Page = page,
                 PageSize = pageSize
             };
+        }
+
+        // Link consumer reports to a reseller ticket
+        public async Task<ResellerTicket> LinkConsumerReportsAsync(Guid ticketId, List<Guid> reportIds, Guid resellerId)
+        {
+            var ticket = await _context.ResellerTickets
+                .Include(t => t.ConsumerReports)
+                .FirstOrDefaultAsync(t => t.Id == ticketId);
+
+            if (ticket == null)
+            {
+                _logger.LogWarning("Reseller {ResellerId} attempted to link reports to non-existent ticket {TicketId}",
+                    resellerId, ticketId);
+                throw new KeyNotFoundException($"Ticket with ID {ticketId} not found");
+            }
+
+            // Authorization: Only the reseller who created the ticket can link reports
+            if (ticket.ResellerId != resellerId)
+            {
+                _logger.LogWarning("Reseller {ResellerId} attempted to link reports to ticket {TicketId} owned by reseller {OwnerId}",
+                    resellerId, ticketId, ticket.ResellerId);
+                throw new UnauthorizedAccessException("You can only link reports to your own tickets");
+            }
+
+            // Only allow linking if ticket is Pending
+            if (ticket.Status != TicketStatus.Pending)
+            {
+                _logger.LogWarning("Attempted to link reports to ticket {TicketId} with status {Status}",
+                    ticketId, ticket.Status);
+                throw new InvalidOperationException($"Cannot link reports to ticket with status '{ticket.Status}'. Only Pending tickets can be modified.");
+            }
+
+            // Get the reports
+            var reports = await _context.ConsumerReports
+                .Include(r => r.Product)
+                .Where(r => reportIds.Contains(r.Id))
+                .ToListAsync();
+
+            if (reports.Count != reportIds.Count)
+            {
+                var foundIds = reports.Select(r => r.Id).ToList();
+                var missingIds = reportIds.Except(foundIds).ToList();
+                _logger.LogWarning("Some report IDs were not found: {MissingIds}", string.Join(", ", missingIds));
+                throw new KeyNotFoundException($"Reports not found: {string.Join(", ", missingIds)}");
+            }
+
+            // Validate and link each report
+            var linkedCount = 0;
+            var errors = new List<string>();
+
+            foreach (var report in reports)
+            {
+                // Check if report is in valid status (Pending)
+                if (report.Status != ReportStatus.Pending)
+                {
+                    errors.Add($"Report {report.Id} has status '{report.Status}' (must be Pending)");
+                    continue;
+                }
+
+                // Check if already linked to another ticket
+                if (report.ResellerTicketId.HasValue && report.ResellerTicketId != ticketId)
+                {
+                    errors.Add($"Report {report.Id} is already linked to ticket {report.ResellerTicketId}");
+                    continue;
+                }
+
+                // Verify reseller sells the product
+                if (report.Product == null)
+                {
+                    errors.Add($"Report {report.Id} has no associated product");
+                    continue;
+                }
+
+                if (report.Product.ResellerId != resellerId)
+                {
+                    errors.Add($"Report {report.Id} is for a product you don't sell (Serial: {report.SerialNumber})");
+                    continue;
+                }
+
+                // Link the report
+                if (report.ResellerTicketId != ticketId)
+                {
+                    report.ResellerTicketId = ticketId;
+                    report.Status = ReportStatus.EscalatedToReseller;
+                    report.UpdatedAt = DateTime.UtcNow;
+                    linkedCount++;
+                }
+            }
+
+            // If there were any errors, throw exception
+            if (errors.Count != 0)
+            {
+                var errorMessage = string.Join("; ", errors);
+                _logger.LogWarning("Failed to link some reports to ticket {TicketId}: {Errors}",
+                    ticketId, errorMessage);
+                throw new InvalidOperationException($"Failed to link some reports: {errorMessage}");
+            }
+
+            if (linkedCount == 0)
+            {
+                _logger.LogWarning("No reports were linked to ticket {TicketId} (all were already linked)",
+                    ticketId);
+                throw new InvalidOperationException("All specified reports are already linked to this ticket");
+            }
+
+            ticket.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Linked {Count} reports to ticket {TicketId} by reseller {ResellerId}",
+                linkedCount, ticketId, resellerId);
+
+            return ticket;
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace NotiBlock.Backend.Models
 {
@@ -43,6 +44,10 @@ namespace NotiBlock.Backend.Models
         public bool IsDeleted { get; set; } = false;
         public DateTime? DeletedAt { get; set; }
         public Guid? DeletedBy { get; set; }
+
+        // Navigation to RegulatorReviews
+        [JsonIgnore]
+        public ICollection<RegulatorReview> RegulatorReviews { get; set; } = [];
     }
 
     public enum TicketCategory

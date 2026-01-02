@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using NotiBlock.Backend.Data;
 using NotiBlock.Backend.DTOs;
+using NotiBlock.Backend.DTOs.Product;
 using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Models;
 

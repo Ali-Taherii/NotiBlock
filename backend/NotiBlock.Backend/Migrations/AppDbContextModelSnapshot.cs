@@ -334,6 +334,49 @@ namespace NotiBlock.Backend.Migrations
                     b.ToTable("Regulators");
                 });
 
+            modelBuilder.Entity("NotiBlock.Backend.Models.RegulatorReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Decision")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("RegulatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RegulatorId");
+
+                    b.HasIndex("TicketId", "RegulatorId")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("RegulatorReviews");
+                });
+
             modelBuilder.Entity("NotiBlock.Backend.Models.Reseller", b =>
                 {
                     b.Property<Guid>("Id")
@@ -566,6 +609,25 @@ namespace NotiBlock.Backend.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("NotiBlock.Backend.Models.RegulatorReview", b =>
+                {
+                    b.HasOne("NotiBlock.Backend.Models.Regulator", "Regulator")
+                        .WithMany()
+                        .HasForeignKey("RegulatorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NotiBlock.Backend.Models.ResellerTicket", "Ticket")
+                        .WithMany("RegulatorReviews")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Regulator");
+
+                    b.Navigation("Ticket");
+                });
+
             modelBuilder.Entity("NotiBlock.Backend.Models.ResellerTicket", b =>
                 {
                     b.HasOne("NotiBlock.Backend.Models.Regulator", "ApprovedBy")
@@ -586,6 +648,8 @@ namespace NotiBlock.Backend.Migrations
             modelBuilder.Entity("NotiBlock.Backend.Models.ResellerTicket", b =>
                 {
                     b.Navigation("ConsumerReports");
+
+                    b.Navigation("RegulatorReviews");
                 });
 #pragma warning restore 612, 618
         }

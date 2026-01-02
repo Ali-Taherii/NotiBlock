@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotiBlock.Backend.DTOs;
+using NotiBlock.Backend.DTOs.Recall;
 using NotiBlock.Backend.Interfaces;
 using System.Security.Claims;
 

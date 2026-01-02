@@ -1,4 +1,4 @@
-﻿namespace NotiBlock.Backend.DTOs
+﻿namespace NotiBlock.Backend.DTOs.Auth
 {
     public class DeleteAccountDTO
     {

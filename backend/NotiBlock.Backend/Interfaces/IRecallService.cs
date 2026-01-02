@@ -1,4 +1,4 @@
-using NotiBlock.Backend.DTOs;
+using NotiBlock.Backend.DTOs.Recall;
 
 namespace NotiBlock.Backend.Interfaces
 {

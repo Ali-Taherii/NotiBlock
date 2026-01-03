@@ -15,6 +15,7 @@ namespace NotiBlock.Backend.Data
         public DbSet<ResellerTicket> ResellerTickets => Set<ResellerTicket>();
         public DbSet<ResellerTicketReadableView> ResellerTicketsReadable => Set<ResellerTicketReadableView>();
         public DbSet<RegulatorReview> RegulatorReviews => Set<RegulatorReview>();
+        public DbSet<Notification> Notifications => Set<Notification>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -155,6 +156,20 @@ namespace NotiBlock.Backend.Data
                 .HasIndex(r => new { r.TicketId, r.RegulatorId })
                 .IsUnique()
                 .HasFilter("\"IsDeleted\" = false");
+
+
+            // ========= NOTIFICATION CONFIGURATION ==========
+            modelBuilder.Entity<Notification>()
+            .HasQueryFilter(n => !n.IsDeleted);
+
+            // Index for faster queries by recipient
+            modelBuilder.Entity<Notification>()
+                .HasIndex(n => new { n.RecipientId, n.IsRead, n.CreatedAt });
+
+            // Index for unread notifications
+            modelBuilder.Entity<Notification>()
+                .HasIndex(n => new { n.RecipientId, n.IsRead })
+                .HasFilter("\"IsRead\" = false");
         }
     }
 }

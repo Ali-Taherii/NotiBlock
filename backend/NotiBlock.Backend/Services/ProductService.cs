@@ -7,10 +7,11 @@ using NotiBlock.Backend.Models;
 
 namespace NotiBlock.Backend.Services
 {
-    public class ProductService(AppDbContext context, ILogger<ProductService> logger) : IProductService
+    public class ProductService(AppDbContext context, ILogger<ProductService> logger, INotificationService notificationService) : IProductService
     {
         private readonly AppDbContext _context = context;
         private readonly ILogger<ProductService> _logger = logger;
+        private readonly INotificationService _notificationService = notificationService;
 
         // Constants for role checking
         private const string RoleConsumer = "consumer";
@@ -65,6 +66,11 @@ namespace NotiBlock.Backend.Services
                 product.RegisteredAt = DateTime.UtcNow;
                 _logger.LogInformation("Product {SerialNumber} registered to consumer {ConsumerId}", 
                     dto.SerialNumber, registererId);
+
+                await _context.SaveChangesAsync();
+                
+                // Notify consumer
+                await _notificationService.NotifyProductRegisteredAsync(product.Id, registererId);
             }
             else if (role == RoleReseller)
             {

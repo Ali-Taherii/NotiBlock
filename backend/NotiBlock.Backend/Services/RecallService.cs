@@ -304,7 +304,7 @@ namespace NotiBlock.Backend.Services
             return MapToResponseDto(recall);
         }
 
-        private RecallResponseDTO MapToResponseDto(Recall recall)
+        private static RecallResponseDTO MapToResponseDto(Recall recall)
         {
             return new RecallResponseDTO
             {

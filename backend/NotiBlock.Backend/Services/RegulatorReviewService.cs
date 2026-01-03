@@ -6,10 +6,11 @@ using NotiBlock.Backend.Models;
 
 namespace NotiBlock.Backend.Services
 {
-    public class RegulatorReviewService(AppDbContext context, ILogger<RegulatorReviewService> logger) : IRegulatorReviewService
+    public class RegulatorReviewService(AppDbContext context, ILogger<RegulatorReviewService> logger, INotificationService notificationService) : IRegulatorReviewService
     {
         private readonly AppDbContext _context = context;
         private readonly ILogger<RegulatorReviewService> _logger = logger;
+        private readonly INotificationService _notificationService = notificationService;
 
         public async Task<RegulatorReview> CreateReviewAsync(RegulatorReviewCreateDTO dto, Guid regulatorId)
         {
@@ -77,6 +78,9 @@ namespace NotiBlock.Backend.Services
             }
 
             await _context.SaveChangesAsync();
+
+            // Notify reseller of ticket status change
+            await _notificationService.NotifyTicketStatusChangeAsync(dto.TicketId, ticket.Status);
 
             _logger.LogInformation("Review {ReviewId} created by regulator {RegulatorId} for ticket {TicketId} with decision {Decision}",
                 review.Id, regulatorId, dto.TicketId, dto.Decision);

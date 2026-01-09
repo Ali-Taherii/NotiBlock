@@ -166,6 +166,7 @@ namespace NotiBlock.Backend.Services
 
             var query = _context.ResellerTickets
                 .Include(t => t.ApprovedBy)
+                .Include(t => t.ConsumerReports)
                 .Where(t => t.ResellerId == resellerId)
                 .OrderByDescending(t => t.CreatedAt);
 

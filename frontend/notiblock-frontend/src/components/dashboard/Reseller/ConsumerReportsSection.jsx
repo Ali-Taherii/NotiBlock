@@ -62,7 +62,7 @@ export default function ConsumerReportsSection() {
     const statusMap = {
       0: 'Pending',
       1: 'Under Review',
-      2: 'Escalated to Reseller',
+      2: 'Escalated to Regulator',
       3: 'Resolved',
       4: 'Closed',
     };

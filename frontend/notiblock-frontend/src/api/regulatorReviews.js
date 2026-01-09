@@ -20,7 +20,7 @@ export async function getMyReviews() {
     return await apiClient.get(`/regulator-reviews/my-reviews`);
 }
 
-export async function getTicketById(ticketId) {
+export async function getTicketReviewsById(ticketId) {
     return await apiClient.get(`/regulator-reviews/ticket/${ticketId}`);
 }
 

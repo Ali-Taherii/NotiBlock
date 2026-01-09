@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FiPlus, FiCheckCircle, FiEye, FiLink } from 'react-icons/fi';
-import { getMyTickets, createTicket, linkReportToTicket } from '../../../api/resellerTickets';
+import { FiPlus, FiCheckCircle, FiEye, FiLink, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import { getMyTickets, createTicket, linkReportToTicket, updateTicket, deleteTicket } from '../../../api/resellerTickets';
 import { getResellerReports } from '../../../api/consumerReports';
 import { useToast } from '../../../hooks/useToast';
 import Toast from '../../shared/Toast';
@@ -9,6 +9,7 @@ export default function MyTicketsSection() {
     const [tickets, setTickets] = useState([]);
     const [reports, setReports] = useState([]);
     const [showCreateForm, setShowCreateForm] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
     const [loading, setLoading] = useState(true);
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [showLinkReports, setShowLinkReports] = useState(false);
@@ -95,6 +96,52 @@ export default function MyTicketsSection() {
         ? prev.filter(id => id !== reportId)
         : [...prev, reportId]
     );
+  };
+
+  const handleEditTicket = (ticket) => {
+    setSelectedTicket(ticket);
+    setFormData({
+      category: ticket.category.toString(),
+      description: ticket.description,
+      priority: ticket.priority.toString(),
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdateTicket = async (e) => {
+    e.preventDefault();
+    try {
+      const ticketData = {
+        category: parseInt(formData.category),
+        description: formData.description,
+        priority: parseInt(formData.priority),
+      };
+      
+      await updateTicket(selectedTicket.id, ticketData);
+      success('Ticket updated successfully!');
+      setFormData({ category: '0', description: '', priority: '0' });
+      setShowEditModal(false);
+      setSelectedTicket(null);
+      fetchTickets();
+    } catch (err) {
+      console.error('Error updating ticket:', err);
+      error(err.response?.data?.message || 'Failed to update ticket');
+    }
+  };
+
+  const handleDeleteTicket = async (ticketId) => {
+    if (!confirm('Are you sure you want to delete this ticket?')) {
+      return;
+    }
+
+    try {
+      await deleteTicket(ticketId);
+      success('Ticket deleted successfully!');
+      fetchTickets();
+    } catch (err) {
+      console.error('Error deleting ticket:', err);
+      error(err.response?.data?.message || 'Failed to delete ticket');
+    }
   };
 
   const getCategoryText = (category) => {
@@ -329,6 +376,86 @@ export default function MyTicketsSection() {
         </div>
       )}
 
+      {/* Edit Modal */}
+      {showEditModal && selectedTicket && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
+            <h3 className="text-xl font-semibold mb-4">Edit Ticket</h3>
+            <form onSubmit={handleUpdateTicket} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Category <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  required
+                >
+                  <option value="0">Product Defect</option>
+                  <option value="1">Quality Issue</option>
+                  <option value="2">Safety Concern</option>
+                  <option value="3">Counterfeit Suspicion</option>
+                  <option value="4">Supply Chain Issue</option>
+                  <option value="5">Customer Complaint</option>
+                  <option value="6">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  rows="4"
+                  placeholder="Describe the issue in detail..."
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Priority
+                </label>
+                <select
+                  value={formData.priority}
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="0">Low</option>
+                  <option value="1">Medium</option>
+                  <option value="2">High</option>
+                  <option value="3">Critical</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Update Ticket
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedTicket(null);
+                    setFormData({ category: '0', description: '', priority: '0' });
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Tickets List */}
       {tickets.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
@@ -374,17 +501,32 @@ export default function MyTicketsSection() {
                     </span>
                   </td>
                   <td className="py-3 px-4">
-                    <button
-                      onClick={() => {
-                        setSelectedTicket(ticket);
-                        setShowLinkReports(true);
-                      }}
-                      className="text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
-                      title="Link Reports"
-                    >
-                      <FiLink className="w-4 h-4" />
-                      <span className="text-sm">Link Reports</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedTicket(ticket);
+                          setShowLinkReports(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
+                        title="Link Reports"
+                      >
+                        <FiLink className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleEditTicket(ticket)}
+                        className="text-green-600 hover:text-green-800 transition-colors"
+                        title="Edit Ticket"
+                      >
+                        <FiEdit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTicket(ticket.id)}
+                        className="text-red-600 hover:text-red-800 transition-colors"
+                        title="Delete Ticket"
+                      >
+                        <FiTrash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

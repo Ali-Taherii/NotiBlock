@@ -17,8 +17,13 @@ namespace NotiBlock.Backend.Interfaces
         Task<PagedResultsDTO<ConsumerReport>> GetAllReportsAsync(int page, int pageSize);
         Task<PagedResultsDTO<ConsumerReport>> GetReportsByStatusAsync(ReportStatus status, int page, int pageSize);
 
-        // Reseller actions
+        // Reseller related operations
         Task<ConsumerReport> ProcessReportActionAsync(Guid reportId, ConsumerReportActionDTO dto, Guid resellerId);
+        Task<PagedResultsDTO<ConsumerReportResponseDTO>> GetResellerRelatedReportsAsync(
+    Guid resellerId,
+    int page,
+    int pageSize
+);
 
         // Statistics
         Task<object> GetReportStatisticsAsync(Guid? consumerId = null);

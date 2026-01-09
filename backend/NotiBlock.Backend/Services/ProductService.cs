@@ -1,7 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using NotiBlock.Backend.Data;
 using NotiBlock.Backend.DTOs;
-using NotiBlock.Backend.DTOs.Product;
 using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Models;
 
@@ -62,14 +61,23 @@ namespace NotiBlock.Backend.Services
                     throw new InvalidOperationException("Product already registered to a consumer");
                 }
 
+                // Validate consumer exists
+                var consumerExists = await _context.Consumers.AnyAsync(c => c.Id == registererId && !c.IsDeleted);
+                if (!consumerExists)
+                {
+                    _logger.LogWarning("Attempted to register product to non-existent consumer: {ConsumerId}", registererId);
+                    throw new KeyNotFoundException($"Consumer with ID {registererId} not found");
+                }
+
                 product.OwnerId = registererId;
                 product.RegisteredAt = DateTime.UtcNow;
+                
                 _logger.LogInformation("Product {SerialNumber} registered to consumer {ConsumerId}", 
                     dto.SerialNumber, registererId);
 
                 await _context.SaveChangesAsync();
                 
-                // Notify consumer
+                // Notify consumer 
                 await _notificationService.NotifyProductRegisteredAsync(product.Id, registererId);
             }
             else if (role == RoleReseller)
@@ -81,10 +89,21 @@ namespace NotiBlock.Backend.Services
                     throw new InvalidOperationException("Product already registered to a reseller");
                 }
 
+                // Validate reseller exists
+                var resellerExists = await _context.Resellers.AnyAsync(r => r.Id == registererId && !r.IsDeleted);
+                if (!resellerExists)
+                {
+                    _logger.LogWarning("Attempted to register product to non-existent reseller: {ResellerId}", registererId);
+                    throw new KeyNotFoundException($"Reseller with ID {registererId} not found");
+                }
+
                 product.ResellerId = registererId;
                 product.RegisteredAt = DateTime.UtcNow;
+                
                 _logger.LogInformation("Product {SerialNumber} registered to reseller {ResellerId}", 
                     dto.SerialNumber, registererId);
+
+                await _context.SaveChangesAsync();
             }
             else
             {
@@ -93,7 +112,6 @@ namespace NotiBlock.Backend.Services
                 throw new InvalidOperationException($"Invalid role '{role}' for registration");
             }
 
-            await _context.SaveChangesAsync();
             return product;
         }
 
@@ -109,89 +127,15 @@ namespace NotiBlock.Backend.Services
             switch (dto.Type)
             {
                 case UnregisterType.RemoveReseller:
-                    // Only manufacturers can remove reseller assignments
-                    if (role != RoleManufacturer)
-                    {
-                        _logger.LogWarning("Non-manufacturer {Role} {UserId} attempted to remove reseller from product {SerialNumber}",
-                            role, userId, dto.SerialNumber);
-                        throw new UnauthorizedAccessException("Only manufacturers can remove reseller assignments");
-                    }
-
-                    // Verify the manufacturer owns this product
-                    if (product.ManufacturerId != userId)
-                    {
-                        _logger.LogWarning("Manufacturer {UserId} attempted to unregister product {SerialNumber} owned by manufacturer {ManufacturerId}",
-                            userId, dto.SerialNumber, product.ManufacturerId);
-                        throw new UnauthorizedAccessException("You can only unregister products you created");
-                    }
-
-                    // Check if reseller is assigned
-                    if (!product.ResellerId.HasValue)
-                    {
-                        _logger.LogWarning("Attempted to remove reseller from product {SerialNumber} that has no reseller assigned",
-                            dto.SerialNumber);
-                        throw new InvalidOperationException("Product does not have a reseller assigned");
-                    }
-
-                    // Check if product has been sold to consumer
-                    if (product.OwnerId.HasValue)
-                    {
-                        _logger.LogWarning("Attempted to remove reseller from product {SerialNumber} that has already been sold to consumer",
-                            dto.SerialNumber);
-                        throw new InvalidOperationException("Cannot remove reseller from product that has been sold to a consumer");
-                    }
-
-                    var removedResellerId = product.ResellerId;
-                    product.ResellerId = null;
-                    product.RegisteredAt = DateTime.UtcNow;
-
-                    _logger.LogInformation("Product {SerialNumber} unregistered from reseller {ResellerId} by manufacturer {ManufacturerId}",
-                        dto.SerialNumber, removedResellerId, userId);
+                    HandleRemoveReseller(product, userId, role);
                     break;
 
                 case UnregisterType.RemoveConsumer:
-                    // Both manufacturers and resellers can remove consumer assignments
-                    if (role == RoleManufacturer)
-                    {
-                        // Verify the manufacturer owns this product
-                        if (product.ManufacturerId != userId)
-                        {
-                            _logger.LogWarning("Manufacturer {UserId} attempted to unregister consumer from product {SerialNumber} owned by manufacturer {ManufacturerId}",
-                                userId, dto.SerialNumber, product.ManufacturerId);
-                            throw new UnauthorizedAccessException("You can only unregister products you created");
-                        }
-                    }
-                    else if (role == RoleReseller)
-                    {
-                        // Verify the reseller is assigned to this product
-                        if (product.ResellerId != userId)
-                        {
-                            _logger.LogWarning("Reseller {UserId} attempted to unregister consumer from product {SerialNumber} assigned to reseller {ResellerId}",
-                                userId, dto.SerialNumber, product.ResellerId);
-                            throw new UnauthorizedAccessException("You can only unregister products assigned to you");
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogWarning("Invalid role {Role} attempted to remove consumer from product {SerialNumber}",
-                            role, dto.SerialNumber);
-                        throw new UnauthorizedAccessException("Only manufacturers and resellers can remove consumer assignments");
-                    }
+                    HandleRemoveConsumer(product, userId, role);
+                    break;
 
-                    // Check if consumer is assigned
-                    if (!product.OwnerId.HasValue)
-                    {
-                        _logger.LogWarning("Attempted to remove consumer from product {SerialNumber} that has no consumer assigned",
-                            dto.SerialNumber);
-                        throw new InvalidOperationException("Product does not have a consumer assigned");
-                    }
-
-                    var removedOwnerId = product.OwnerId;
-                    product.OwnerId = null;
-                    product.RegisteredAt = DateTime.UtcNow;
-
-                    _logger.LogInformation("Product {SerialNumber} unregistered from consumer {ConsumerId} by {Role} {UserId}",
-                        dto.SerialNumber, removedOwnerId, role, userId);
+                case UnregisterType.SelfUnregister:
+                    HandleSelfUnregister(product, userId, role);
                     break;
 
                 default:
@@ -202,12 +146,136 @@ namespace NotiBlock.Backend.Services
             return product;
         }
 
-        public async Task<Product> GetProductBySerialNumberAsync(string serialNumber)
+        private void HandleRemoveReseller(Product product, Guid userId, string role)
+        {
+            // Only manufacturers can remove reseller assignments
+            if (role != RoleManufacturer)
+            {
+                _logger.LogWarning("Non-manufacturer {Role} {UserId} attempted to remove reseller from product {SerialNumber}",
+                    role, userId, product.SerialNumber);
+                throw new UnauthorizedAccessException("Only manufacturers can remove reseller assignments");
+            }
+
+            // Verify the manufacturer owns this product
+            if (product.ManufacturerId != userId)
+            {
+                _logger.LogWarning("Manufacturer {UserId} attempted to unregister product {SerialNumber} owned by manufacturer {ManufacturerId}",
+                    userId, product.SerialNumber, product.ManufacturerId);
+                throw new UnauthorizedAccessException("You can only unregister products you created");
+            }
+
+            // Check if reseller is assigned
+            if (!product.ResellerId.HasValue)
+            {
+                _logger.LogWarning("Attempted to remove reseller from product {SerialNumber} that has no reseller assigned",
+                    product.SerialNumber);
+                throw new InvalidOperationException("Product does not have a reseller assigned");
+            }
+
+            // Check if product has been sold to consumer
+            if (product.OwnerId.HasValue)
+            {
+                _logger.LogWarning("Attempted to remove reseller from product {SerialNumber} that has already been sold to consumer",
+                    product.SerialNumber);
+                throw new InvalidOperationException("Cannot remove reseller from product that has been sold to a consumer");
+            }
+
+            var removedResellerId = product.ResellerId;
+            product.ResellerId = null;
+            product.RegisteredAt = DateTime.UtcNow;
+
+            _logger.LogInformation("Product {SerialNumber} unregistered from reseller {ResellerId} by manufacturer {ManufacturerId}",
+                product.SerialNumber, removedResellerId, userId);
+        }
+
+        private void HandleRemoveConsumer(Product product, Guid userId, string role)
+        {
+            // Manufacturers and resellers can remove consumer assignments
+            if (role == RoleManufacturer)
+            {
+                // Verify the manufacturer owns this product
+                if (product.ManufacturerId != userId)
+                {
+                    _logger.LogWarning("Manufacturer {UserId} attempted to unregister consumer from product {SerialNumber} owned by manufacturer {ManufacturerId}",
+                        userId, product.SerialNumber, product.ManufacturerId);
+                    throw new UnauthorizedAccessException("You can only unregister products you created");
+                }
+            }
+            else if (role == RoleReseller)
+            {
+                // Verify the reseller is assigned to this product
+                if (product.ResellerId != userId)
+                {
+                    _logger.LogWarning("Reseller {UserId} attempted to unregister consumer from product {SerialNumber} assigned to reseller {ResellerId}",
+                        userId, product.SerialNumber, product.ResellerId);
+                    throw new UnauthorizedAccessException("You can only unregister products assigned to you");
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Invalid role {Role} attempted to remove consumer from product {SerialNumber}",
+                    role, product.SerialNumber);
+                throw new UnauthorizedAccessException("Only manufacturers and resellers can remove consumer assignments");
+            }
+
+            // Check if consumer is assigned
+            if (!product.OwnerId.HasValue)
+            {
+                _logger.LogWarning("Attempted to remove consumer from product {SerialNumber} that has no consumer assigned",
+                    product.SerialNumber);
+                throw new InvalidOperationException("Product does not have a consumer assigned");
+            }
+
+            var removedOwnerId = product.OwnerId;
+            product.OwnerId = null;
+            product.RegisteredAt = DateTime.UtcNow;
+
+            _logger.LogInformation("Product {SerialNumber} unregistered from consumer {ConsumerId} by {Role} {UserId}",
+                product.SerialNumber, removedOwnerId, role, userId);
+        }
+
+        private void HandleSelfUnregister(Product product, Guid userId, string role)
+        {
+            // Only consumers can self-unregister
+            if (role != RoleConsumer)
+            {
+                _logger.LogWarning("Non-consumer {Role} {UserId} attempted to self-unregister from product {SerialNumber}",
+                    role, userId, product.SerialNumber);
+                throw new UnauthorizedAccessException("Only consumers can unregister themselves from products");
+            }
+
+            // Check if consumer owns this product
+            if (product.OwnerId != userId)
+            {
+                _logger.LogWarning("Consumer {UserId} attempted to unregister from product {SerialNumber} they don't own",
+                    userId, product.SerialNumber);
+                throw new UnauthorizedAccessException("You can only unregister from products you own");
+            }
+
+            // Check if consumer is actually assigned
+            if (!product.OwnerId.HasValue)
+            {
+                _logger.LogWarning("Consumer {UserId} attempted to unregister from product {SerialNumber} that has no owner",
+                    userId, product.SerialNumber);
+                throw new InvalidOperationException("Product is not registered to any consumer");
+            }
+
+            product.OwnerId = null;
+            product.RegisteredAt = DateTime.UtcNow;
+
+            _logger.LogInformation("Consumer {ConsumerId} self-unregistered from product {SerialNumber}",
+                userId, product.SerialNumber);
+        }
+
+        public async Task<ProductResponseDTO> GetProductBySerialNumberAsync(string serialNumber)
         {
             if (string.IsNullOrWhiteSpace(serialNumber))
                 throw new ArgumentException("Serial number cannot be empty");
 
             var product = await _context.Products
+                .Include(p => p.Manufacturer)
+                .Include(p => p.Reseller)
+                .Include(p => p.Owner)
                 .FirstOrDefaultAsync(p => p.SerialNumber == serialNumber.Trim());
 
             if (product == null)
@@ -216,7 +284,7 @@ namespace NotiBlock.Backend.Services
                 throw new KeyNotFoundException($"Product with serial number {serialNumber} not found");
             }
 
-            return product;
+            return MapToResponseDTO(product);
         }
 
         public async Task<Product> UpdateProductAsync(string serialNumber, ProductUpdateDTO dto, Guid userId, string role)
@@ -250,7 +318,7 @@ namespace NotiBlock.Backend.Services
             if (role == RoleManufacturer && dto.ResellerId.HasValue)
             {
                 // Validate reseller exists
-                var resellerExists = await _context.Resellers.AnyAsync(r => r.Id == dto.ResellerId.Value);
+                var resellerExists = await _context.Resellers.AnyAsync(r => r.Id == dto.ResellerId.Value && !r.IsDeleted);
                 if (!resellerExists)
                 {
                     _logger.LogWarning("Attempted to assign product {SerialNumber} to non-existent reseller {ResellerId}", 
@@ -273,7 +341,7 @@ namespace NotiBlock.Backend.Services
                 }
 
                 // Validate consumer exists
-                var consumerExists = await _context.Consumers.AnyAsync(c => c.Id == dto.OwnerId.Value);
+                var consumerExists = await _context.Consumers.AnyAsync(c => c.Id == dto.OwnerId.Value && !c.IsDeleted);
                 if (!consumerExists)
                 {
                     _logger.LogWarning("Attempted to assign product {SerialNumber} to non-existent consumer {OwnerId}", 
@@ -351,8 +419,8 @@ namespace NotiBlock.Backend.Services
             return true;
         }
 
-        // List methods
-        public async Task<PagedResultsDTO<Product>> GetManufacturerProductsAsync(Guid manufacturerId, int page, int pageSize)
+        // List methods - Updated to return ProductResponseDTO
+        public async Task<PagedResultsDTO<ProductResponseDTO>> GetManufacturerProductsAsync(Guid manufacturerId, int page, int pageSize)
         {
             if (page < 1)
             {
@@ -367,6 +435,9 @@ namespace NotiBlock.Backend.Services
             }
 
             var query = _context.Products
+                .Include(p => p.Manufacturer)
+                .Include(p => p.Reseller)
+                .Include(p => p.Owner)
                 .Where(p => p.ManufacturerId == manufacturerId)
                 .OrderByDescending(p => p.RegisteredAt);
 
@@ -379,16 +450,16 @@ namespace NotiBlock.Backend.Services
             _logger.LogInformation("Retrieved {Count} products for manufacturer {ManufacturerId} (Page {Page} of {TotalPages})",
                 items.Count, manufacturerId, page, Math.Ceiling(totalCount / (double)pageSize));
 
-            return new PagedResultsDTO<Product>
+            return new PagedResultsDTO<ProductResponseDTO>
             {
-                Items = items,
+                Items = [.. items.Select(MapToResponseDTO)],
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize
             };
         }
 
-        public async Task<PagedResultsDTO<Product>> GetResellerProductsAsync(Guid resellerId, int page, int pageSize)
+        public async Task<PagedResultsDTO<ProductResponseDTO>> GetResellerProductsAsync(Guid resellerId, int page, int pageSize)
         {
             if (page < 1)
             {
@@ -403,6 +474,9 @@ namespace NotiBlock.Backend.Services
             }
 
             var query = _context.Products
+                .Include(p => p.Manufacturer)
+                .Include(p => p.Reseller)
+                .Include(p => p.Owner)
                 .Where(p => p.ResellerId == resellerId)
                 .OrderByDescending(p => p.RegisteredAt);
 
@@ -415,16 +489,16 @@ namespace NotiBlock.Backend.Services
             _logger.LogInformation("Retrieved {Count} products for reseller {ResellerId} (Page {Page} of {TotalPages})",
                 items.Count, resellerId, page, Math.Ceiling(totalCount / (double)pageSize));
 
-            return new PagedResultsDTO<Product>
+            return new PagedResultsDTO<ProductResponseDTO>
             {
-                Items = items,
+                Items = [.. items.Select(MapToResponseDTO)],
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize
             };
         }
 
-        public async Task<PagedResultsDTO<Product>> GetConsumerProductsAsync(Guid consumerId, int page, int pageSize)
+        public async Task<PagedResultsDTO<ProductResponseDTO>> GetConsumerProductsAsync(Guid consumerId, int page, int pageSize)
         {
             if (page < 1)
             {
@@ -439,6 +513,9 @@ namespace NotiBlock.Backend.Services
             }
 
             var query = _context.Products
+                .Include(p => p.Manufacturer)
+                .Include(p => p.Reseller)
+                .Include(p => p.Owner)
                 .Where(p => p.OwnerId == consumerId)
                 .OrderByDescending(p => p.RegisteredAt);
 
@@ -451,12 +528,49 @@ namespace NotiBlock.Backend.Services
             _logger.LogInformation("Retrieved {Count} products for consumer {ConsumerId} (Page {Page} of {TotalPages})",
                 items.Count, consumerId, page, Math.Ceiling(totalCount / (double)pageSize));
 
-            return new PagedResultsDTO<Product>
+            return new PagedResultsDTO<ProductResponseDTO>
             {
-                Items = items,
+                Items = [.. items.Select(MapToResponseDTO)],
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize
+            };
+        }
+
+        // Helper method to map Product to ProductResponseDTO
+        private ProductResponseDTO MapToResponseDTO(Product product)
+        {
+            return new ProductResponseDTO
+            {
+                Id = product.Id,
+                SerialNumber = product.SerialNumber,
+                Model = product.Model,
+                RegisteredAt = product.RegisteredAt,
+                ManufacturerId = product.ManufacturerId,
+                Manufacturer = product.Manufacturer != null ? new ManufacturerBasicDTO
+                {
+                    Id = product.Manufacturer.Id,
+                    CompanyName = product.Manufacturer.CompanyName,
+                    Email = product.Manufacturer.Email,
+                    WalletAddress = product.Manufacturer.WalletAddress
+                } : null,
+                ResellerId = product.ResellerId,
+                Reseller = product.Reseller != null ? new ResellerBasicDTO
+                {
+                    Id = product.Reseller.Id,
+                    CompanyName = product.Reseller.CompanyName,
+                    Email = product.Reseller.Email,
+                    WalletAddress = product.Reseller.WalletAddress
+                } : null,
+                OwnerId = product.OwnerId,
+                Owner = product.Owner != null ? new ConsumerBasicDTO
+                {
+                    Id = product.Owner.Id,
+                    Name = product.Owner.Name,
+                    Email = product.Owner.Email ?? string.Empty,
+                    PhoneNumber = product.Owner.PhoneNumber,
+                    WalletAddress = product.Owner.WalletAddress
+                } : null
             };
         }
     }

@@ -5,11 +5,8 @@ import AuthPage from "../pages/Auth";
 import ManufacturerDashboard from "../pages/ManufacturerDashboard";
 import ConsumerDashboard from "../pages/ConsumerDashboard";
 import RegulatorDashboard from "../pages/RegulatorDashboard";
-import ReportIssue from "../components/dashboard/Consumer/ReportIssue";
-import MyTickets from "../components/dashboard/Consumer/MyTickets";
-import ProfileInfo from "../components/dashboard/Consumer/ProfileInfo";
+import ResellerDashboard from "../pages/ResellerDashboard";
 import { ProtectedRoute } from "./ProtectedRoute";
-import NotFound from "../pages/NotFound";
 
 export default function AppRouter() {
 
@@ -17,7 +14,7 @@ export default function AppRouter() {
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/not-found" element={<NotFound />} />
+        {/* <Route path="/not-found" element={<NotFound />} /> */}
         <Route path="/recalls" element={<Recalls />} />
         <Route path="/auth" element={<AuthPage />} />
 
@@ -37,9 +34,14 @@ export default function AppRouter() {
             <RegulatorDashboard />
           </ProtectedRoute>
         } />
+        <Route path="/reseller/dashboard" element={
+          <ProtectedRoute role="reseller">
+            <ResellerDashboard />
+          </ProtectedRoute>
+        } />
 
         {/* Consumer specific routes */}
-        <Route path="/consumer/report-issue" element={
+        {/* <Route path="/consumer/report-issue" element={
           <ProtectedRoute role="consumer">
             <ReportIssue />
           </ProtectedRoute>
@@ -53,7 +55,10 @@ export default function AppRouter() {
           <ProtectedRoute role="consumer">
             <ProfileInfo />
           </ProtectedRoute>
-        } />
+        } /> */}
+
+        {/* Catch-all route for 404 */}
+        {/* <Route path="*" element={<NotFound />} /> */}
       </Routes>
     </Router>
   );

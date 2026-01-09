@@ -649,21 +649,27 @@ namespace NotiBlock.Backend.Migrations
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Product", b =>
                 {
-                    b.HasOne("NotiBlock.Backend.Models.Manufacturer", null)
+                    b.HasOne("NotiBlock.Backend.Models.Manufacturer", "Manufacturer")
                         .WithMany()
                         .HasForeignKey("ManufacturerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("NotiBlock.Backend.Models.Consumer", null)
+                    b.HasOne("NotiBlock.Backend.Models.Consumer", "Owner")
                         .WithMany()
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("NotiBlock.Backend.Models.Reseller", null)
+                    b.HasOne("NotiBlock.Backend.Models.Reseller", "Reseller")
                         .WithMany()
                         .HasForeignKey("ResellerId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Manufacturer");
+
+                    b.Navigation("Owner");
+
+                    b.Navigation("Reseller");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Recall", b =>

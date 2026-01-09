@@ -217,7 +217,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpGet("status/{status}")]
-        [Authorize(Roles = "regulator")]
+        [Authorize(Roles = "regulator, manufacturer")]
         public async Task<IActionResult> GetByStatus(TicketStatus status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try

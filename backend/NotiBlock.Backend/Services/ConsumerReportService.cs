@@ -1,10 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using NotiBlock.Backend.Data;
 using NotiBlock.Backend.DTOs;
 using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Models;
-using System.ComponentModel.DataAnnotations;
 
 namespace NotiBlock.Backend.Services
 {
@@ -17,39 +15,39 @@ namespace NotiBlock.Backend.Services
         {
             // Validate product exists - FIX: Use FirstOrDefaultAsync instead of FindAsync
             var product = await _context.Products
-                .FirstOrDefaultAsync(p => p.SerialNumber == dto.SerialNumber.Trim());
+                .FirstOrDefaultAsync(p => p.SerialNumber == dto.ProductSerialNumber.Trim());
             
             if (product == null)
             {
                 _logger.LogWarning("Consumer {ConsumerId} attempted to report non-existent product {SerialNumber}",
-                    consumerId, dto.SerialNumber);
-                throw new KeyNotFoundException($"Product with serial number {dto.SerialNumber} not found");
+                    consumerId, dto.ProductSerialNumber);
+                throw new KeyNotFoundException($"Product with serial number {dto.ProductSerialNumber} not found");
             }
 
             // Validate consumer owns the product
             if (product.OwnerId != consumerId)
             {
                 _logger.LogWarning("Consumer {ConsumerId} attempted to report product {SerialNumber} they don't own",
-                    consumerId, dto.SerialNumber);
+                    consumerId, dto.ProductSerialNumber);
                 throw new UnauthorizedAccessException("You can only report products you own");
             }
 
             // Check for existing open report for this product
             var existingReport = await _context.ConsumerReports
                 .AnyAsync(r => r.ConsumerId == consumerId && 
-                              r.SerialNumber == dto.SerialNumber.Trim() && 
+                              r.SerialNumber == dto.ProductSerialNumber.Trim() && 
                               r.Status == ReportStatus.Pending);
 
             if (existingReport)
             {
                 _logger.LogWarning("Consumer {ConsumerId} attempted to create duplicate report for product {SerialNumber}",
-                    consumerId, dto.SerialNumber);
+                    consumerId, dto.ProductSerialNumber);
                 throw new InvalidOperationException("You already have an open report for this product");
             }
 
             var report = new ConsumerReport
             {
-                SerialNumber = dto.SerialNumber.Trim().ToUpperInvariant(), // Normalize to uppercase
+                SerialNumber = dto.ProductSerialNumber.Trim().ToUpperInvariant(), // Normalize to uppercase
                 Description = dto.IssueDescription.Trim(),
                 ConsumerId = consumerId,
                 Status = ReportStatus.Pending,
@@ -60,7 +58,7 @@ namespace NotiBlock.Backend.Services
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Report {ReportId} created by consumer {ConsumerId} for product {SerialNumber}",
-                report.Id, consumerId, dto.SerialNumber);
+                report.Id, consumerId, dto.ProductSerialNumber);
 
             return report;
         }
@@ -322,6 +320,17 @@ namespace NotiBlock.Backend.Services
                         reportId, resellerId);
                     break;
 
+                case ReportAction.RequestMoreInfo:
+                    if (report.Status != ReportStatus.UnderReview)
+                    {
+                        throw new InvalidOperationException($"Cannot request more info for report with status '{report.Status}'");
+                    }
+                    report.Status = ReportStatus.UnderReview;
+                    report.ResolutionNotes = dto.ResolutionNotes;
+                    _logger.LogInformation("Reseller {ResellerId} requested more info for report {ReportId}",
+                        resellerId, reportId);
+                    break;
+
                 case ReportAction.Escalate:
                     if (report.Status != ReportStatus.UnderReview && report.Status != ReportStatus.Pending)
                     {
@@ -390,5 +399,88 @@ namespace NotiBlock.Backend.Services
 
             return stats;
         }
+
+        public async Task<PagedResultsDTO<ConsumerReportResponseDTO>> GetResellerRelatedReportsAsync(
+    Guid resellerId, 
+    int page, 
+    int pageSize)
+{
+    if (page < 1)
+    {
+        _logger.LogWarning("Invalid page number {Page} requested, defaulting to 1", page);
+        page = 1;
+    }
+
+    if (pageSize < 1 || pageSize > 100)
+    {
+        _logger.LogWarning("Invalid page size {PageSize} requested, defaulting to 20", pageSize);
+        pageSize = 20;
+    }
+
+    // Join ConsumerReports with Products to filter by ResellerId
+    var query = from report in _context.ConsumerReports
+                join product in _context.Products on report.SerialNumber equals product.SerialNumber
+                where product.ResellerId == resellerId
+                orderby report.CreatedAt descending
+                select report;
+
+    var totalCount = await query.CountAsync();
+    
+    // eagerly load Manufacturer safely
+    var reports = await query
+        .Include(r => r.Consumer)
+        .Include(r => r.Product)
+            .ThenInclude(p => p.Manufacturer)
+        .Include(r => r.ResellerTicket)
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize)
+        .ToListAsync();
+
+    _logger.LogInformation(
+        "Retrieved {Count} consumer reports for reseller {ResellerId} (Page {Page} of {TotalPages})",
+        reports.Count, 
+        resellerId, 
+        page, 
+        Math.Ceiling(totalCount / (double)pageSize)
+    );
+
+    return new PagedResultsDTO<ConsumerReportResponseDTO>
+    {
+        Items = [.. reports.Select(MapToResponseDTO)],
+        TotalCount = totalCount,
+        Page = page,
+        PageSize = pageSize
+    };
+}
+
+private ConsumerReportResponseDTO MapToResponseDTO(ConsumerReport report)
+{
+    return new ConsumerReportResponseDTO
+    {
+        Id = report.Id,
+        ConsumerId = report.ConsumerId,
+        ConsumerName = report.Consumer?.Name ?? "Unknown",
+        ConsumerEmail = report.Consumer?.Email ?? string.Empty,
+        SerialNumber = report.SerialNumber,
+        
+        // Add product information
+        Product = report.Product != null ? new ProductBasicInfoDTO
+        {
+            Id = report.Product.Id,
+            SerialNumber = report.Product.SerialNumber,
+            Model = report.Product.Model,
+            ManufacturerName = report.Product.Manufacturer?.CompanyName ?? "Unknown"
+        } : null,
+        
+        Description = report.Description,
+        Status = report.Status,
+        CreatedAt = report.CreatedAt,
+        UpdatedAt = report.UpdatedAt,
+        ResolvedAt = report.ResolvedAt,
+        ResellerTicketId = report.ResellerTicketId,
+        ResolvedBy = report.ResolvedBy,
+        ResolutionNotes = report.ResolutionNotes
+    };
+}
     }
 }

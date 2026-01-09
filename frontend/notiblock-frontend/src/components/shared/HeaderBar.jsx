@@ -20,7 +20,7 @@ export default function HeaderBar() {
                 ) : (
                     <div className="flex items-center space-x-4">
                         <a
-                            href="profile-info"
+                            href="/consumer/profile-info"
                             className="bg-white text-indigo-700 font-semibold px-4 py-2 rounded shadow hover:bg-gray-100 transition"
                         >
                             My Profile

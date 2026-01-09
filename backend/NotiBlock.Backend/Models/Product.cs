@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
-    namespace NotiBlock.Backend.Models
+namespace NotiBlock.Backend.Models
 {
     public class Product
     {
@@ -16,10 +17,16 @@
 
         [Required]
         public Guid ManufacturerId { get; set; }
+        [JsonIgnore]
+        public Manufacturer? Manufacturer { get; set; }
 
         public Guid? ResellerId { get; set; }
+        [JsonIgnore]
+        public Reseller? Reseller { get; set; }
 
         public Guid? OwnerId { get; set; }
+        [JsonIgnore]
+        public Consumer? Owner { get; set; }
 
         public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
 
@@ -27,10 +34,5 @@
         public bool IsDeleted { get; set; } = false;
         public DateTime? DeletedAt { get; set; }
         public Guid? DeletedBy { get; set; }
-
-        // Navigation properties (optional - depends on biz logic)
-        // public Manufacturer? Manufacturer { get; set; }
-        // public Reseller? Reseller { get; set; }
-        // public Consumer? Owner { get; set; }
     }
 }

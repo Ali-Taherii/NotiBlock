@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using NotiBlock.Backend.Models;
 
 namespace NotiBlock.Backend.DTOs
 {
@@ -18,6 +17,7 @@ namespace NotiBlock.Backend.DTOs
     public enum ReportAction
     {
         Review,      // Reseller starts reviewing
+        RequestMoreInfo, // Get more info from the consumer
         Resolve,     // Reseller resolves the issue
         Escalate,    // Escalate to reseller ticket
         Close        // Close the report

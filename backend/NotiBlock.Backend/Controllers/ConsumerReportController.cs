@@ -292,5 +292,36 @@ namespace NotiBlock.Backend.Controllers
                 return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving statistics"));
             }
         }
+
+        [HttpGet("reseller/related-reports")]
+        [Authorize(Roles = "reseller")]
+        public async Task<IActionResult> GetResellerRelatedReports(
+            [FromQuery] int page = 1, 
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var resellerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var result = await _service.GetResellerRelatedReportsAsync(resellerId, page, pageSize);
+                
+                _logger.LogInformation(
+                    "Retrieved {Count} related consumer reports for reseller {ResellerId}", 
+                    result.Items.Count, 
+                    resellerId
+                );
+                
+                return Ok(ApiResponse<PagedResultsDTO<ConsumerReportResponseDTO>>.SuccessResponse(
+                    result,
+                    $"Retrieved {result.Items.Count} consumer reports for your products"
+                ));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving reseller-related consumer reports");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse(
+                    "An error occurred while retrieving consumer reports"
+                ));
+            }
+        }
     }
 }

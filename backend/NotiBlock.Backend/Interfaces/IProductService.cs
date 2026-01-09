@@ -1,5 +1,4 @@
 ﻿using NotiBlock.Backend.DTOs;
-using NotiBlock.Backend.DTOs.Product;
 using NotiBlock.Backend.Models;
 
 namespace NotiBlock.Backend.Interfaces
@@ -8,14 +7,14 @@ namespace NotiBlock.Backend.Interfaces
     {
         Task<Product> CreateProductAsync(ProductCreateDTO dto, Guid manufacturerId);
         Task<Product> RegisterProductAsync(ProductRegisterDTO dto, Guid registererId, string role);
-        Task<Product> GetProductBySerialNumberAsync(string serialNumber);
         Task<Product> UpdateProductAsync(string serialNumber, ProductUpdateDTO dto, Guid userId, string role);
         Task<bool> DeleteProductAsync(string serialNumber, Guid userId);
         
         // List endpoints
-        Task<PagedResultsDTO<Product>> GetManufacturerProductsAsync(Guid manufacturerId, int page, int pageSize);
-        Task<PagedResultsDTO<Product>> GetResellerProductsAsync(Guid resellerId, int page, int pageSize);
-        Task<PagedResultsDTO<Product>> GetConsumerProductsAsync(Guid consumerId, int page, int pageSize);
+        Task<ProductResponseDTO> GetProductBySerialNumberAsync(string serialNumber);
+        Task<PagedResultsDTO<ProductResponseDTO>> GetManufacturerProductsAsync(Guid manufacturerId, int page, int pageSize);
+        Task<PagedResultsDTO<ProductResponseDTO>> GetResellerProductsAsync(Guid resellerId, int page, int pageSize);
+        Task<PagedResultsDTO<ProductResponseDTO>> GetConsumerProductsAsync(Guid consumerId, int page, int pageSize);
         
         // New unregister endpoint
         Task<Product> UnregisterProductAsync(ProductUnregisterDTO dto, Guid userId, string role);

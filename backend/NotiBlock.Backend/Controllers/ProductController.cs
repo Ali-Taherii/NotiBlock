@@ -1,10 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotiBlock.Backend.DTOs;
-using NotiBlock.Backend.Models;
 using NotiBlock.Backend.Interfaces;
 using System.Security.Claims;
-using NotiBlock.Backend.DTOs.Product;
 
 namespace NotiBlock.Backend.Controllers
 {
@@ -55,6 +53,11 @@ namespace NotiBlock.Backend.Controllers
                 _logger.LogWarning(ex, "Product not found for registration");
                 return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
             }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid product registration request");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Invalid product registration request");
@@ -68,7 +71,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpPost("unregister")]
-        [Authorize(Roles = "manufacturer,reseller")]
+        [Authorize(Roles = "manufacturer,reseller,consumer")]  // Added consumer role
         public async Task<IActionResult> Unregister([FromBody] ProductUnregisterDTO dto)
         {
             try
@@ -77,9 +80,13 @@ namespace NotiBlock.Backend.Controllers
                 var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
                 var result = await _service.UnregisterProductAsync(dto, userId, role);
                 
-                string message = dto.Type == UnregisterType.RemoveReseller 
-                    ? "Reseller removed from product successfully" 
-                    : "Consumer removed from product successfully";
+                string message = dto.Type switch
+                {
+                    UnregisterType.RemoveReseller => "Reseller removed from product successfully",
+                    UnregisterType.RemoveConsumer => "Consumer removed from product successfully",
+                    UnregisterType.SelfUnregister => "You have successfully unregistered from this product",
+                    _ => "Product unregistered successfully"
+                };
                 
                 _logger.LogInformation("Product unregistered successfully by user {UserId} with role {Role}", userId, role);
                 return Ok(ApiResponse<object>.SuccessResponse(result, message));
@@ -118,12 +125,17 @@ namespace NotiBlock.Backend.Controllers
             {
                 var result = await _service.GetProductBySerialNumberAsync(serialNumber);
                 _logger.LogInformation("Product retrieved successfully with serial number {SerialNumber}", serialNumber);
-                return Ok(ApiResponse<object>.SuccessResponse(result));
+                return Ok(ApiResponse<ProductResponseDTO>.SuccessResponse(result));
             }
             catch (KeyNotFoundException ex)
             {
                 _logger.LogWarning("Product not found with serial number {SerialNumber}", serialNumber);
                 return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid serial number");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
             }
             catch (Exception ex)
             {
@@ -158,6 +170,11 @@ namespace NotiBlock.Backend.Controllers
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Invalid product update request for {SerialNumber}", serialNumber);
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid update operation on product {SerialNumber}", serialNumber);
                 return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
             }
             catch (Exception ex)
@@ -206,18 +223,20 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
-        // List endpoints
-        [HttpGet("manufacturer/my-products")]
+        [HttpGet("manufacturer")]
         [Authorize(Roles = "manufacturer")]
-        public async Task<IActionResult> GetMyProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        public async Task<IActionResult> GetManufacturerProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var result = await _service.GetManufacturerProductsAsync(userId, page, pageSize);
-
-                _logger.LogInformation("Manufacturer {UserId} retrieved their products (Page {Page})", userId, page);
-                return Ok(ApiResponse<PagedResultsDTO<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
+                
+                _logger.LogInformation("Retrieved products for manufacturer {UserId}", userId);
+                return Ok(ApiResponse<PagedResultsDTO<ProductResponseDTO>>.SuccessResponse(
+                    result, 
+                    $"Retrieved {result.Items.Count} products"
+                ));
             }
             catch (Exception ex)
             {
@@ -226,17 +245,21 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
-        [HttpGet("reseller/my-products")]
+        [HttpGet("reseller")]
         [Authorize(Roles = "reseller")]
-        public async Task<IActionResult> GetMyResellerProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        public async Task<IActionResult> GetResellerProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var result = await _service.GetResellerProductsAsync(userId, page, pageSize);
+                
+                _logger.LogInformation("Retrieved products for reseller {UserId}", userId);
+                return Ok(ApiResponse<PagedResultsDTO<ProductResponseDTO>>.SuccessResponse(
+                    result,
+                    $"Retrieved {result.Items.Count} products"
+                ));
 
-                _logger.LogInformation("Reseller {UserId} retrieved their products (Page {Page})", userId, page);
-                return Ok(ApiResponse<PagedResultsDTO<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
             }
             catch (Exception ex)
             {
@@ -245,17 +268,20 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
-        [HttpGet("consumer/my-products")]
+        [HttpGet("consumer")]
         [Authorize(Roles = "consumer")]
-        public async Task<IActionResult> GetMyConsumerProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        public async Task<IActionResult> GetConsumerProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var result = await _service.GetConsumerProductsAsync(userId, page, pageSize);
-
-                _logger.LogInformation("Consumer {UserId} retrieved their products (Page {Page})", userId, page);
-                return Ok(ApiResponse<PagedResultsDTO<Product>>.SuccessResponse(result, $"Retrieved {result.Items.Count} products"));
+                
+                _logger.LogInformation("Retrieved products for consumer {UserId}", userId);
+                return Ok(ApiResponse<PagedResultsDTO<ProductResponseDTO>>.SuccessResponse(
+                    result,
+                    $"Retrieved {result.Items.Count} products"
+                ));
             }
             catch (Exception ex)
             {

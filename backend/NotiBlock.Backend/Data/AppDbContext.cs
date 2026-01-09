@@ -53,33 +53,35 @@ namespace NotiBlock.Backend.Data
                 .HasQueryFilter(r => !r.IsDeleted);
 
             // ========== PRODUCT CONFIGURATION ==========
-            
-            // Unique: Product Serial Number (only for non-deleted products)
-            modelBuilder.Entity<Product>()
-                .HasIndex(p => p.SerialNumber)
-                .IsUnique()
-                .HasFilter("\"IsDeleted\" = false");
 
-            // One-to-many: Manufacturer makes many Products
-            modelBuilder.Entity<Product>()
-                .HasOne<Manufacturer>()
-                .WithMany()
-                .HasForeignKey(p => p.ManufacturerId)
-                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<Product>(entity =>
+            {
+                // Unique: Product Serial Number (only for non-deleted products)
+                entity.HasIndex(p => p.SerialNumber)
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
 
-            // Optional: Reseller assigned to Product
-            modelBuilder.Entity<Product>()
-                .HasOne<Reseller>()
-                .WithMany()
-                .HasForeignKey(p => p.ResellerId)
-                .OnDelete(DeleteBehavior.SetNull);
+                // One-to-many: Manufacturer makes many Products
+                entity.HasOne(p => p.Manufacturer)  // Specify the navigation property
+                    .WithMany()
+                    .HasForeignKey(p => p.ManufacturerId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .IsRequired();
 
-            // Optional: Consumer owns Product
-            modelBuilder.Entity<Product>()
-                .HasOne<Consumer>()
-                .WithMany()
-                .HasForeignKey(p => p.OwnerId)
-                .OnDelete(DeleteBehavior.Restrict);
+                // Optional: Reseller assigned to Product
+                entity.HasOne(p => p.Reseller)  // Specify the navigation property
+                    .WithMany()
+                    .HasForeignKey(p => p.ResellerId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .IsRequired(false);
+
+                // Optional: Consumer owns Product
+                entity.HasOne(p => p.Owner)  // Specify the navigation property
+                    .WithMany()
+                    .HasForeignKey(p => p.OwnerId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .IsRequired(false);
+            });
 
             // ========== CONSUMER REPORT CONFIGURATION ==========
             

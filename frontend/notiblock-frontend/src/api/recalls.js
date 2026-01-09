@@ -1,29 +1,25 @@
-import { apiFetch } from "./api";
+import apiClient from "./api";
 
 export async function createRecall(data) {
-    return await apiFetch("/recall", {
-        method: "POST",
-        body: JSON.stringify(data),
-    });
+    return await apiClient.post("/recalls", data);
 }
 
 export async function getRecalls() {
-    return await apiFetch("/recall/all");
+    return await apiClient.get("/recalls");
 }
 
 export async function getRecallById(id) {
-    return await apiFetch(`/recall/${id}`);
+    return await apiClient.get(`/recalls/${id}`);
 }
 
 export async function updateRecall(id, data) {
-    return await apiFetch(`/recall/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-    });
+    return await apiClient.put(`/recalls/${id}`, data);
 }
 
 export async function deleteRecall(id) {
-    return await apiFetch(`/recall/${id}`, {
-        method: "DELETE",
-    });
+    return await apiClient.delete(`/recalls/${id}`);
+}
+
+export async function getMyRecalls() {
+    return await apiClient.get("/recalls/manufacturer");
 }

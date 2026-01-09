@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { createRecall } from "../api/recalls";
+import { useToast } from "../hooks/useToast";
+import Toast from "./shared/Toast";
 
 export default function RecallForm({refetch}) {
   const [productId, setProductId] = useState("");
   const [reason, setReason] = useState("");
   const [actionRequired, setActionRequired] = useState("");
+  const { toast, success, error, hideToast } = useToast();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -15,15 +18,17 @@ export default function RecallForm({refetch}) {
       setReason("");
       setActionRequired("");
       refetch(); // Refetch recalls after creation
-      alert("Recall created successfully!");
-    } catch (error) {
-      console.error("Error creating recall:", error);
-      alert("Failed to create recall. Please try again.");
+      success("Recall created successfully!");
+    } catch (err) {
+      console.error("Error creating recall:", err);
+      error("Failed to create recall. Please try again.");
     }
   };
 
   return (
     <div className="max-w-md mx-auto p-4 bg-white shadow-md rounded">
+      <Toast show={toast.show} message={toast.message} type={toast.type} onClose={hideToast} />
+      
       <h2 className="text-2xl font-bold mb-4">Create Recall</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>

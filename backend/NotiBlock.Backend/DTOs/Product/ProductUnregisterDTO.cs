@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace NotiBlock.Backend.DTOs.Product
+namespace NotiBlock.Backend.DTOs
 {
     public class ProductUnregisterDTO
     {
@@ -15,6 +15,7 @@ namespace NotiBlock.Backend.DTOs.Product
     public enum UnregisterType
     {
         RemoveReseller,   // Manufacturer removes reseller assignment (0)
-        RemoveConsumer    // Manufacturer or Reseller removes consumer assignment (1)
+        RemoveConsumer,    // Manufacturer or Reseller removes consumer assignment (1)
+        SelfUnregister    // Consumer unregisters the product from their ownership (2)
     }
 }

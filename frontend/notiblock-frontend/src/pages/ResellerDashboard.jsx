@@ -3,6 +3,7 @@ import { FiPackage, FiFileText, FiCheckCircle } from 'react-icons/fi';
 import LogoutButton from '../components/shared/LogoutButton';
 import ProductsSection from '../components/dashboard/Reseller/ProductsSection';
 import ConsumerReportsSection from '../components/dashboard/Reseller/ConsumerReportsSection';
+import MyTicketsSection from '../components/dashboard/Reseller/MyTicketsSection';
 
 export default function ResellerDashboard() {
   const [activeTab, setActiveTab] = useState('products');
@@ -48,13 +49,7 @@ export default function ResellerDashboard() {
         <div className="bg-white rounded-lg shadow-sm p-6">
           {activeTab === 'products' && <ProductsSection />}
           {activeTab === 'reports' && <ConsumerReportsSection />}
-          {activeTab === 'tickets' && (
-            <div className="text-center py-12">
-              <FiCheckCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-gray-700 mb-2">My Tickets Section</h2>
-              <p className="text-gray-500">Track your submitted tickets</p>
-            </div>
-          )}
+          {activeTab === 'tickets' && <MyTicketsSection />}
         </div>
       </div>
     </div>

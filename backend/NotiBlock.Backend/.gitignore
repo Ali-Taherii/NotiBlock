@@ -4,9 +4,5 @@ bin/
 logs/
 Migrations/
 
-appsettings.json
-appsettings.Development.json
-appsettings.Production.json
-
 .env
 .env.local

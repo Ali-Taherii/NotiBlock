@@ -16,6 +16,8 @@ namespace NotiBlock.Backend.Data
         public DbSet<ResellerTicketReadableView> ResellerTicketsReadable => Set<ResellerTicketReadableView>();
         public DbSet<RegulatorReview> RegulatorReviews => Set<RegulatorReview>();
         public DbSet<Notification> Notifications => Set<Notification>();
+        public DbSet<BlockchainRecall> BlockchainRecalls => Set<BlockchainRecall>();
+        public DbSet<RecallBlockchainEvent> RecallBlockchainEvents => Set<RecallBlockchainEvent>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -172,6 +174,28 @@ namespace NotiBlock.Backend.Data
             modelBuilder.Entity<Notification>()
                 .HasIndex(n => new { n.RecipientId, n.IsRead })
                 .HasFilter("\"IsRead\" = false");
+
+
+            // ========== BLOCKCHAIN RECALL CONFIGURATION ==========
+            // Global query filter for soft delete
+            modelBuilder.Entity<BlockchainRecall>()
+                .HasQueryFilter(br => !br.IsDeleted);
+
+            modelBuilder.Entity<RecallBlockchainEvent>()
+                .HasQueryFilter(rbe => !rbe.IsDeleted);
+
+            // Relationships
+            modelBuilder.Entity<BlockchainRecall>()
+                .HasOne(br => br.Recall)
+                .WithMany()
+                .HasForeignKey(br => br.RecallId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<RecallBlockchainEvent>()
+                .HasOne(rbe => rbe.Recall)
+                .WithMany()
+                .HasForeignKey(rbe => rbe.RecallId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

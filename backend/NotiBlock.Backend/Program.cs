@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using NotiBlock.Backend.Configuration;
 using NotiBlock.Backend.Data;
 using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Middleware;
@@ -80,6 +81,9 @@ try
     builder.Services.AddScoped<IResellerTicketService, ResellerTicketService>();
     builder.Services.AddScoped<IRegulatorReviewService, RegulatorReviewService>();
     builder.Services.AddScoped<INotificationService, NotificationService>();
+    builder.Services.Configure<BlockchainSettings>(
+        builder.Configuration.GetSection("Blockchain"));
+    builder.Services.AddScoped<IBlockchainService, BlockchainService>();
 
     // Add CORS policy
     var corsOrigin = builder.Configuration.GetValue<string>("CorsSettings:AllowedOrigin") ?? "http://localhost:5173";

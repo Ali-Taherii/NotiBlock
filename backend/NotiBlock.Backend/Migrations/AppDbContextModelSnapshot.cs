@@ -22,6 +22,60 @@ namespace NotiBlock.Backend.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("NotiBlock.Backend.Models.BlockchainRecall", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("BlockNumber")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<int>("ChainId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ConfirmationCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EventSignature")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MetadataHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RecallId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("TransactionConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TransactionHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecallId");
+
+                    b.ToTable("BlockchainRecalls");
+                });
+
             modelBuilder.Entity("NotiBlock.Backend.Models.Consumer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -366,6 +420,63 @@ namespace NotiBlock.Backend.Migrations
                     b.ToTable("Recalls");
                 });
 
+            modelBuilder.Entity("NotiBlock.Backend.Models.RecallBlockchainEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ActorRole")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("BlockNumber")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<int>("ChainId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("EventEmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("MetadataHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("NewStatus")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RecallId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TransactionHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecallId");
+
+                    b.ToTable("RecallBlockchainEvents");
+                });
+
             modelBuilder.Entity("NotiBlock.Backend.Models.Regulator", b =>
                 {
                     b.Property<Guid>("Id")
@@ -620,6 +731,17 @@ namespace NotiBlock.Backend.Migrations
                     b.ToView("vw_resellertickets_readable", (string)null);
                 });
 
+            modelBuilder.Entity("NotiBlock.Backend.Models.BlockchainRecall", b =>
+                {
+                    b.HasOne("NotiBlock.Backend.Models.Recall", "Recall")
+                        .WithMany()
+                        .HasForeignKey("RecallId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Recall");
+                });
+
             modelBuilder.Entity("NotiBlock.Backend.Models.ConsumerReport", b =>
                 {
                     b.HasOne("NotiBlock.Backend.Models.Consumer", "Consumer")
@@ -687,6 +809,17 @@ namespace NotiBlock.Backend.Migrations
                     b.Navigation("Manufacturer");
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("NotiBlock.Backend.Models.RecallBlockchainEvent", b =>
+                {
+                    b.HasOne("NotiBlock.Backend.Models.Recall", "Recall")
+                        .WithMany()
+                        .HasForeignKey("RecallId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Recall");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.RegulatorReview", b =>

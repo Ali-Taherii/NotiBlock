@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using DotNetEnv;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -9,6 +10,9 @@ using NotiBlock.Backend.Middleware;
 using NotiBlock.Backend.Services;
 using Serilog;
 using System.Text;
+
+// ===== LOAD .ENV FILE FIRST =====
+Env.Load();
 
 // Configure Serilog before building the app
 Log.Logger = new LoggerConfiguration()
@@ -31,6 +35,14 @@ try
     // Use Serilog for logging
     builder.Host.UseSerilog();
 
+    // ===== LOAD CONFIGURATION FROM .ENV =====
+    builder.Configuration
+        .SetBasePath(Directory.GetCurrentDirectory())
+        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+        .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+        .AddEnvironmentVariables()
+        .AddUserSecrets<Program>(optional: true);
+
     // Add services to the container.
     builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -40,9 +52,6 @@ try
     
         // Make property names camelCase
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
-    
-        // Ignore null values
-        //options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
     })
     .ConfigureApiBehaviorOptions(options =>
     {
@@ -72,8 +81,15 @@ try
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddProblemDetails();
 
+    // ===== DATABASE CONFIGURATION =====
+    var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+    Log.Information("Database Connection String: {ConnectionString}", 
+        defaultConnection == null ? "NOT CONFIGURED" : "Configured");
+
     builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+        options.UseNpgsql(defaultConnection));
+
+    // ===== SERVICES REGISTRATION =====
     builder.Services.AddScoped<IRecallService, RecallService>();
     builder.Services.AddScoped<IAuthService, AuthService>();
     builder.Services.AddScoped<IProductService, ProductService>();
@@ -81,8 +97,19 @@ try
     builder.Services.AddScoped<IResellerTicketService, ResellerTicketService>();
     builder.Services.AddScoped<IRegulatorReviewService, RegulatorReviewService>();
     builder.Services.AddScoped<INotificationService, NotificationService>();
-    builder.Services.Configure<BlockchainSettings>(
-        builder.Configuration.GetSection("Blockchain"));
+
+    // ===== BLOCKCHAIN CONFIGURATION =====
+    var blockchainSettings = builder.Configuration.GetSection("Blockchain");
+    var rpcUrl = blockchainSettings["RpcUrl"];
+    var privateKey = blockchainSettings["PrivateKey"];
+    var contractAddress = blockchainSettings["ContractAddress"];
+
+    Log.Information("Blockchain Configuration:");
+    Log.Information("  RPC URL: {RpcUrl}", string.IsNullOrEmpty(rpcUrl) ? "NOT SET" : "Configured");
+    Log.Information("  Private Key: {PrivateKey}", string.IsNullOrEmpty(privateKey) ? "NOT SET" : "Configured");
+    Log.Information("  Contract Address: {ContractAddress}", string.IsNullOrEmpty(contractAddress) ? "NOT SET" : contractAddress);
+
+    builder.Services.Configure<BlockchainSettings>(blockchainSettings);
     builder.Services.AddScoped<IBlockchainService, BlockchainService>();
 
     // Add CORS policy

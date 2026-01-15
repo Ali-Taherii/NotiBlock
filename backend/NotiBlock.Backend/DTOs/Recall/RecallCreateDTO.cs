@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace NotiBlock.Backend.DTOs.Recall
+namespace NotiBlock.Backend.DTOs
 {
     public class RecallCreateDTO
     {

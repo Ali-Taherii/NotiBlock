@@ -1,4 +1,5 @@
-using NotiBlock.Backend.DTOs.Recall;
+using NotiBlock.Backend.DTOs;
+using NotiBlock.Backend.Models;
 
 namespace NotiBlock.Backend.Interfaces
 {
@@ -12,5 +13,9 @@ namespace NotiBlock.Backend.Interfaces
         Task<RecallResponseDTO?> UpdateRecallAsync(Guid id, RecallUpdateDTO dto, Guid manufacturerId);
         Task<bool> SoftDeleteRecallAsync(Guid id, Guid manufacturerId);
         Task<bool> ResolveRecallAsync(Guid id, Guid manufacturerId);
+        Task<RecallBlockchainDTO> IssueRecallToBlockchainAsync(Guid recallId, Guid manufacturerId);
+        Task<RecallBlockchainDTO> UpdateRecallStatusOnBlockchainAsync(Guid recallId, string newStatus, Guid manufacturerId);
+        Task<RecallBlockchainDTO?> GetRecallBlockchainDataAsync(Guid recallId);
+        Task<bool> VerifyRecallOnBlockchainAsync(Guid recallId);
     }
 }

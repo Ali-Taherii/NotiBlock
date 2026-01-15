@@ -2,13 +2,17 @@ using Microsoft.EntityFrameworkCore;
 using NotiBlock.Backend.Data;
 using NotiBlock.Backend.Models;
 using NotiBlock.Backend.Interfaces;
-using NotiBlock.Backend.DTOs.Recall;
+using NotiBlock.Backend.DTOs;
 
 namespace NotiBlock.Backend.Services
 {
-    public class RecallService(AppDbContext context, ILogger<RecallService> logger) : IRecallService
+    public class RecallService(
+        AppDbContext context,
+        IBlockchainService blockchainService,
+        ILogger<RecallService> logger) : IRecallService
     {
         private readonly AppDbContext _context = context;
+        private readonly IBlockchainService _blockchainService = blockchainService;
         private readonly ILogger<RecallService> _logger = logger;
 
         public async Task<RecallResponseDTO> CreateRecallAsync(RecallCreateDTO dto, Guid manufacturerId)
@@ -18,7 +22,7 @@ namespace NotiBlock.Backend.Services
 
             if (manufacturer == null)
             {
-                _logger.LogWarning("Attempted to create recall for non-existent manufacturer: {ManufacturerId}", 
+                _logger.LogWarning("Attempted to create recall for non-existent manufacturer: {ManufacturerId}",
                     manufacturerId);
                 throw new KeyNotFoundException("Manufacturer not found");
             }
@@ -43,8 +47,8 @@ namespace NotiBlock.Backend.Services
 
             // Check for existing active recall for this product
             var existingRecall = await _context.Recalls
-                .AnyAsync(r => r.ProductSerialNumber == product.SerialNumber && 
-                              r.Status == RecallStatus.Active && 
+                .AnyAsync(r => r.ProductSerialNumber == product.SerialNumber &&
+                              r.Status == RecallStatus.Active &&
                               !r.IsDeleted);
 
             if (existingRecall)
@@ -75,6 +79,166 @@ namespace NotiBlock.Backend.Services
             return await GetRecallResponseDto(recall.Id);
         }
 
+        // ===== BLOCKCHAIN INTEGRATION METHODS =====
+
+        public async Task<RecallBlockchainDTO> IssueRecallToBlockchainAsync(Guid recallId, Guid manufacturerId)
+        {
+            try
+            {
+                var recall = await _context.Recalls.FindAsync(recallId)
+                    ?? throw new KeyNotFoundException($"Recall {recallId} not found");
+
+                // Authorization: Only the manufacturer who created it can issue to blockchain
+                if (recall.ManufacturerId != manufacturerId)
+                {
+                    _logger.LogWarning("Manufacturer {UserId} attempted to issue recall {RecallId} to blockchain (owned by {ManufacturerId})",
+                        manufacturerId, recallId, recall.ManufacturerId);
+                    throw new UnauthorizedAccessException("You can only issue your own recalls to blockchain");
+                }
+
+                // Check if already issued to blockchain
+                var existingBlockchainRecall = await _context.BlockchainRecalls
+                    .FirstOrDefaultAsync(br => br.RecallId == recallId);
+
+                if (existingBlockchainRecall != null)
+                {
+                    _logger.LogWarning("Recall {RecallId} already issued to blockchain", recallId);
+                    throw new InvalidOperationException("Recall already issued to blockchain");
+                }
+
+                _logger.LogInformation("Issuing recall {RecallId} to blockchain", recallId);
+
+                // Emit RecallIssued event on blockchain
+                var blockchainData = await _blockchainService.EmitRecallIssuedAsync(
+                    recallId,
+                    actorRole: "manufacturer",
+                    actor: manufacturerId.ToString());
+
+                // Update recall with transaction hash
+                recall.TransactionHash = blockchainData.TransactionHash;
+                recall.LastUpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Recall {RecallId} successfully issued to blockchain. TxHash: {TxHash}",
+                    recallId, blockchainData.TransactionHash);
+
+                return blockchainData;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error issuing recall {RecallId} to blockchain", recallId);
+                throw;
+            }
+        }
+
+        public async Task<RecallBlockchainDTO> UpdateRecallStatusOnBlockchainAsync(Guid recallId, string newStatus, Guid manufacturerId)
+        {
+            try
+            {
+                var recall = await _context.Recalls.FindAsync(recallId)
+                    ?? throw new KeyNotFoundException($"Recall {recallId} not found");
+
+                // Authorization: Only the manufacturer who created it can update
+                if (recall.ManufacturerId != manufacturerId)
+                {
+                    _logger.LogWarning("Manufacturer {UserId} attempted to update recall {RecallId} on blockchain (owned by {ManufacturerId})",
+                        manufacturerId, recallId, recall.ManufacturerId);
+                    throw new UnauthorizedAccessException("You can only update your own recalls");
+                }
+
+                // Check if recall was issued to blockchain
+                var blockchainRecall = await _context.BlockchainRecalls
+                    .FirstOrDefaultAsync(br => br.RecallId == recallId)
+                    ?? throw new InvalidOperationException("Recall not issued to blockchain yet. Issue it first.");
+
+                _logger.LogInformation("Updating recall {RecallId} status to {NewStatus} on blockchain", recallId, newStatus);
+
+                // Emit RecallStatusChanged event on blockchain
+                var blockchainData = await _blockchainService.EmitRecallStatusChangedAsync(
+                    recallId,
+                    newStatus: newStatus,
+                    actorRole: "manufacturer",
+                    actor: manufacturerId.ToString());
+
+                // Update recall status and transaction hash
+                recall.TransactionHash = blockchainData.TransactionHash;
+                recall.LastUpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Recall {RecallId} status updated to {NewStatus} on blockchain. TxHash: {TxHash}",
+                    recallId, newStatus, blockchainData.TransactionHash);
+
+                return blockchainData;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating recall {RecallId} status on blockchain", recallId);
+                throw;
+            }
+        }
+
+        public async Task<RecallBlockchainDTO?> GetRecallBlockchainDataAsync(Guid recallId)
+        {
+            try
+            {
+                var blockchainRecall = await _context.BlockchainRecalls
+                    .FirstOrDefaultAsync(br => br.RecallId == recallId && !br.IsDeleted);
+
+                if (blockchainRecall == null)
+                {
+                    _logger.LogInformation("No blockchain data found for recall {RecallId}", recallId);
+                    return null;
+                }
+
+                return new RecallBlockchainDTO
+                {
+                    RecallId = blockchainRecall.RecallId,
+                    TransactionHash = blockchainRecall.TransactionHash,
+                    BlockNumber = blockchainRecall.BlockNumber,
+                    ChainId = blockchainRecall.ChainId,
+                    MetadataHash = blockchainRecall.MetadataHash,
+                    EventType = blockchainRecall.EventSignature ?? string.Empty,
+                    TransactionConfirmedAt = blockchainRecall.TransactionConfirmedAt,
+                    ConfirmationCount = blockchainRecall.ConfirmationCount
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving blockchain data for recall {RecallId}", recallId);
+                return null;
+            }
+        }
+
+        public async Task<bool> VerifyRecallOnBlockchainAsync(Guid recallId)
+        {
+            try
+            {
+                var blockchainRecall = await _context.BlockchainRecalls
+                    .FirstOrDefaultAsync(br => br.RecallId == recallId && !br.IsDeleted);
+
+                if (blockchainRecall == null)
+                {
+                    _logger.LogWarning("No blockchain record found for recall {RecallId}", recallId);
+                    return false;
+                }
+
+                var isVerified = await _blockchainService.VerifyRecallOnBlockchainAsync(blockchainRecall.TransactionHash);
+
+                _logger.LogInformation("Recall {RecallId} verification result: {IsVerified}", recallId, isVerified);
+
+                return isVerified;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error verifying recall {RecallId} on blockchain", recallId);
+                return false;
+            }
+        }
+
+        // ===== EXISTING METHODS =====
+
         public async Task<RecallResponseDTO?> GetRecallByIdAsync(Guid id)
         {
             try
@@ -103,7 +267,7 @@ namespace NotiBlock.Backend.Services
                 .OrderByDescending(r => r.IssuedAt)
                 .ToListAsync();
 
-            _logger.LogInformation("Retrieved {Count} recalls (includeDeleted: {IncludeDeleted})", 
+            _logger.LogInformation("Retrieved {Count} recalls (includeDeleted: {IncludeDeleted})",
                 recalls.Count, includeDeleted);
 
             return recalls.Select(r => MapToResponseDto(r));
@@ -117,7 +281,7 @@ namespace NotiBlock.Backend.Services
                 .OrderByDescending(r => r.IssuedAt)
                 .ToListAsync();
 
-            _logger.LogInformation("Retrieved {Count} recalls for manufacturer {ManufacturerId}", 
+            _logger.LogInformation("Retrieved {Count} recalls for manufacturer {ManufacturerId}",
                 recalls.Count, manufacturerId);
 
             return recalls.Select(r => MapToResponseDto(r));
@@ -137,7 +301,7 @@ namespace NotiBlock.Backend.Services
                 .OrderByDescending(r => r.IssuedAt)
                 .ToListAsync();
 
-            _logger.LogInformation("Retrieved {Count} recalls for product {ProductId}", 
+            _logger.LogInformation("Retrieved {Count} recalls for product {ProductId}",
                 recalls.Count, productId);
 
             return recalls.Select(r => MapToResponseDto(r));
@@ -198,41 +362,24 @@ namespace NotiBlock.Backend.Services
 
             _logger.LogInformation("Recall {RecallId} updated by manufacturer {UserId}", id, manufacturerId);
 
-            return MapToResponseDto(recall);
+            return await GetRecallResponseDto(id);
         }
 
         public async Task<bool> SoftDeleteRecallAsync(Guid id, Guid manufacturerId)
         {
-            var recall = await _context.Recalls
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(r => r.Id == id);
+            var recall = await _context.Recalls.FindAsync(id);
 
-            if (recall == null)
+            if (recall == null || recall.IsDeleted)
             {
-                _logger.LogWarning("Attempted to delete non-existent recall: {RecallId}", id);
-                throw new KeyNotFoundException($"Recall with ID {id} not found");
+                _logger.LogWarning("Attempted to delete non-existent or already deleted recall: {RecallId}", id);
+                return false;
             }
 
-            if (recall.IsDeleted)
-            {
-                _logger.LogWarning("Attempted to delete already deleted recall: {RecallId}", id);
-                throw new InvalidOperationException($"Recall {id} is already deleted");
-            }
-
-            // Authorization: Only the manufacturer who created it can delete
             if (recall.ManufacturerId != manufacturerId)
             {
                 _logger.LogWarning("Manufacturer {UserId} attempted to delete recall {RecallId} owned by manufacturer {ManufacturerId}",
                     manufacturerId, id, recall.ManufacturerId);
                 throw new UnauthorizedAccessException("You can only delete your own recalls");
-            }
-
-            // Only allow deletion if recall is in Active status
-            if (recall.Status != RecallStatus.Active)
-            {
-                _logger.LogWarning("Attempted to delete recall {RecallId} with status {Status}",
-                    id, recall.Status);
-                throw new InvalidOperationException($"Cannot delete recall with status '{recall.Status}'. Use cancellation instead.");
             }
 
             recall.IsDeleted = true;
@@ -242,8 +389,7 @@ namespace NotiBlock.Backend.Services
 
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Recall {RecallId} soft deleted by manufacturer {UserId} at {DeletedAt}",
-                id, manufacturerId, recall.DeletedAt);
+            _logger.LogInformation("Recall {RecallId} soft deleted by manufacturer {UserId}", id, manufacturerId);
 
             return true;
         }
@@ -255,27 +401,14 @@ namespace NotiBlock.Backend.Services
             if (recall == null || recall.IsDeleted)
             {
                 _logger.LogWarning("Attempted to resolve non-existent or deleted recall: {RecallId}", id);
-                throw new KeyNotFoundException($"Recall with ID {id} not found");
+                return false;
             }
 
-            // Authorization: Only the manufacturer who created it can resolve
             if (recall.ManufacturerId != manufacturerId)
             {
                 _logger.LogWarning("Manufacturer {UserId} attempted to resolve recall {RecallId} owned by manufacturer {ManufacturerId}",
                     manufacturerId, id, recall.ManufacturerId);
                 throw new UnauthorizedAccessException("You can only resolve your own recalls");
-            }
-
-            if (recall.Status == RecallStatus.Resolved)
-            {
-                _logger.LogWarning("Attempted to resolve already resolved recall: {RecallId}", id);
-                throw new InvalidOperationException("Recall is already resolved");
-            }
-
-            if (recall.Status == RecallStatus.Cancelled)
-            {
-                _logger.LogWarning("Attempted to resolve cancelled recall: {RecallId}", id);
-                throw new InvalidOperationException("Cannot resolve a cancelled recall");
             }
 
             recall.Status = RecallStatus.Resolved;
@@ -284,8 +417,7 @@ namespace NotiBlock.Backend.Services
 
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Recall {RecallId} resolved by manufacturer {UserId} at {ResolvedAt}",
-                id, manufacturerId, recall.ResolvedAt);
+            _logger.LogInformation("Recall {RecallId} resolved by manufacturer {UserId}", id, manufacturerId);
 
             return true;
         }
@@ -294,12 +426,8 @@ namespace NotiBlock.Backend.Services
         {
             var recall = await _context.Recalls
                 .Include(r => r.Manufacturer)
-                .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted);
-
-            if (recall == null)
-            {
-                throw new KeyNotFoundException("Recall not found");
-            }
+                .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted)
+                ?? throw new KeyNotFoundException($"Recall {id} not found");
 
             return MapToResponseDto(recall);
         }
@@ -309,14 +437,14 @@ namespace NotiBlock.Backend.Services
             return new RecallResponseDTO
             {
                 Id = recall.Id,
-                ManufacturerId = recall.ManufacturerId,
-                ManufacturerName = recall.Manufacturer?.CompanyName ?? string.Empty,
                 ProductId = recall.ProductSerialNumber,
                 Reason = recall.Reason,
                 ActionRequired = recall.ActionRequired,
                 Status = recall.Status,
                 IssuedAt = recall.IssuedAt,
                 ResolvedAt = recall.ResolvedAt,
+                ManufacturerId = recall.ManufacturerId,
+                ManufacturerName = recall.Manufacturer?.CompanyName ?? string.Empty,
                 TransactionHash = recall.TransactionHash,
                 CreatedAt = recall.CreatedAt,
                 LastUpdatedAt = recall.LastUpdatedAt

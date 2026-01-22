@@ -408,6 +408,48 @@ namespace NotiBlock.Backend.Services
             };
         }
 
+        public async Task<PagedResultsDTO<ResellerTicket>> GetApprovedTicketsForManufacturerAsync(Guid manufacturerId, int page, int pageSize)
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+            // Get approved tickets that have consumer reports for this manufacturer's products
+            var query = from ticket in _context.ResellerTickets
+                        join report in _context.ConsumerReports on ticket.Id equals report.ResellerTicketId
+                        join product in _context.Products on report.SerialNumber equals product.SerialNumber
+                        where product.ManufacturerId == manufacturerId
+                              && ticket.Status == TicketStatus.Approved
+                              && !ticket.IsDeleted
+                        select ticket;
+
+            // Distinct tickets (a ticket might have multiple reports for the same manufacturer)
+            var distinctQuery = query
+                .Distinct()
+                .Include(t => t.Reseller)
+                .Include(t => t.ApprovedBy)
+                .Include(t => t.ConsumerReports)
+                    .ThenInclude(cr => cr.Product)
+                .Include(t => t.RegulatorReviews)
+                .OrderByDescending(t => t.UpdatedAt);
+
+            var totalCount = await distinctQuery.CountAsync();
+            var items = await distinctQuery
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            _logger.LogInformation("Retrieved {Count} approved tickets for manufacturer {ManufacturerId} (Page {Page})",
+                items.Count, manufacturerId, page);
+
+            return new PagedResultsDTO<ResellerTicket>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+
         // ===== NOTIFICATION HELPER METHODS =====
 
         private async Task SendReviewCreatedNotificationsAsync(

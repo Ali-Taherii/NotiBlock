@@ -14,7 +14,8 @@ namespace NotiBlock.Backend.Interfaces
         Task<PagedResultsDTO<RegulatorReview>> GetReviewsByRegulatorAsync(Guid regulatorId, int page, int pageSize);
         Task<PagedResultsDTO<RegulatorReview>> GetReviewsByTicketAsync(Guid ticketId, int page, int pageSize);
         Task<PagedResultsDTO<ResellerTicket>> GetPendingTicketsAsync(int page, int pageSize);
-        
+        Task<PagedResultsDTO<ResellerTicket>> GetApprovedTicketsForManufacturerAsync(Guid manufacturerId, int page, int pageSize);
+
         // Escalation
         Task<ResellerTicket> EscalateToManufacturerAsync(Guid ticketId, Guid regulatorId);
         

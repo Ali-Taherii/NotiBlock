@@ -22,6 +22,10 @@ export async function updateBlockchainStatus(id, newStatus) {
     });
 }
 
+export async function issueRecallToBlockchain(id) {
+    return await apiClient.post(`/recalls/${id}/issue-blockchain`);
+}
+
 export async function deleteRecall(id) {
     return await apiClient.delete(`/recalls/${id}`);
 }

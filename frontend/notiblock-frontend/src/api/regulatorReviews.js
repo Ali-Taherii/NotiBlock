@@ -32,6 +32,10 @@ export async function escalateTicket(ticketId) {
     return await apiClient.post(`/regulator-reviews/ticket/${ticketId}/escalate`);
 }
 
+export async function getApprovedManufacturerTickets() {
+    return await apiClient.get("/regulator-reviews/manufacturer/approved-tickets");
+}
+
 export async function getReviewStatistics() {
     return await apiClient.get("/regulator-reviews/stats");
 }

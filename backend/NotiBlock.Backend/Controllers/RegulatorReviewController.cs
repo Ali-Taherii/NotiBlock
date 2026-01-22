@@ -9,13 +9,15 @@ namespace NotiBlock.Backend.Controllers
 {
     [ApiController]
     [Route("api/regulator-reviews")]
-    [Authorize(Roles = "regulator")]
     public class RegulatorReviewController(IRegulatorReviewService service, ILogger<RegulatorReviewController> logger) : ControllerBase
     {
         private readonly IRegulatorReviewService _service = service;
         private readonly ILogger<RegulatorReviewController> _logger = logger;
 
+        // ===== REGULATOR ENDPOINTS =====
+
         [HttpPost]
+        [Authorize(Roles = "regulator")]
         public async Task<IActionResult> Create([FromBody] RegulatorReviewCreateDTO dto)
         {
             try
@@ -43,6 +45,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = "regulator")]
         public async Task<IActionResult> GetById(Guid id)
         {
             try
@@ -74,6 +77,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "regulator")]
         public async Task<IActionResult> Update(Guid id, [FromBody] RegulatorReviewUpdateDTO dto)
         {
             try
@@ -106,6 +110,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "regulator")]
         public async Task<IActionResult> Delete(Guid id)
         {
             try
@@ -138,6 +143,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpGet("my-reviews")]
+        [Authorize(Roles = "regulator")]
         public async Task<IActionResult> GetMyReviews([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
@@ -155,6 +161,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpGet("ticket/{ticketId}")]
+        [Authorize(Roles = "regulator,manufacturer")]
         public async Task<IActionResult> GetReviewsByTicket(Guid ticketId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
@@ -171,6 +178,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpGet("pending-tickets")]
+        [Authorize(Roles = "regulator")]
         public async Task<IActionResult> GetPendingTickets([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
@@ -187,6 +195,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpPost("ticket/{ticketId}/escalate")]
+        [Authorize(Roles = "regulator")]
         public async Task<IActionResult> EscalateToManufacturer(Guid ticketId)
         {
             try
@@ -219,6 +228,7 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpGet("stats")]
+        [Authorize(Roles = "regulator")]
         public async Task<IActionResult> GetStatistics()
         {
             try
@@ -234,5 +244,114 @@ namespace NotiBlock.Backend.Controllers
                 return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving statistics"));
             }
         }
+
+        // ===== MANUFACTURER ENDPOINTS =====
+
+        /// <summary>
+        /// Get approved tickets related to manufacturer's products
+        /// </summary>
+        [HttpGet("manufacturer/approved-tickets")]
+        [Authorize(Roles = "manufacturer")]
+        public async Task<IActionResult> GetApprovedTicketsForManufacturer([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var manufacturerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var result = await _service.GetApprovedTicketsForManufacturerAsync(manufacturerId, page, pageSize);
+                
+                _logger.LogInformation("Manufacturer {ManufacturerId} retrieved {Count} approved tickets (Page {Page})",
+                    manufacturerId, result.Items.Count, page);
+                
+                return Ok(ApiResponse<PagedResultsDTO<ResellerTicket>>.SuccessResponse(result, 
+                    $"Retrieved {result.Items.Count} approved tickets"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving approved tickets for manufacturer");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving approved tickets"));
+            }
+        }
+
+        ///// <summary>
+        ///// Get all tickets (any status) related to manufacturer's products
+        ///// </summary>
+        //[HttpGet("manufacturer/my-approved-tickets")]
+        //[Authorize(Roles = "manufacturer")]
+        //public async Task<IActionResult> GetApprovedTicketsForManufacturer([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        //{
+        //    try
+        //    {
+        //        var manufacturerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        //        var result = await _service.GetApprovedTicketsForManufacturerAsync(manufacturerId, page, pageSize);
+                
+        //        _logger.LogInformation("Manufacturer {ManufacturerId} retrieved {Count} tickets (Page {Page})",
+        //            manufacturerId, result.Items.Count, page);
+                
+        //        return Ok(ApiResponse<PagedResultsDTO<ResellerTicket>>.SuccessResponse(result, 
+        //            $"Retrieved {result.Items.Count} tickets"));
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error retrieving tickets for manufacturer");
+        //        return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving tickets"));
+        //    }
+        //}
+
+        ///// <summary>
+        ///// Get ticket details with reviews (for manufacturer)
+        ///// </summary>
+        //[HttpGet("manufacturer/tickets/{ticketId}")]
+        //[Authorize(Roles = "manufacturer")]
+        //public async Task<IActionResult> GetTicketDetailsForManufacturer(Guid ticketId)
+        //{
+        //    try
+        //    {
+        //        var manufacturerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        //        var ticket = await _service.GetTicketDetailsForManufacturerAsync(ticketId, manufacturerId);
+                
+        //        _logger.LogInformation("Manufacturer {ManufacturerId} retrieved ticket {TicketId} details",
+        //            manufacturerId, ticketId);
+                
+        //        return Ok(ApiResponse<object>.SuccessResponse(ticket, "Ticket details retrieved successfully"));
+        //    }
+        //    catch (UnauthorizedAccessException ex)
+        //    {
+        //        _logger.LogWarning(ex, "Manufacturer attempted to access unrelated ticket {TicketId}", ticketId);
+        //        return StatusCode(403, ApiResponse<object>.ErrorResponse(ex.Message));
+        //    }
+        //    catch (KeyNotFoundException ex)
+        //    {
+        //        _logger.LogWarning(ex, "Ticket not found: {TicketId}", ticketId);
+        //        return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error retrieving ticket {TicketId} for manufacturer", ticketId);
+        //        return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving ticket details"));
+        //    }
+        //}
+
+        ///// <summary>
+        ///// Get manufacturer-specific statistics about tickets
+        ///// </summary>
+        //[HttpGet("manufacturer/stats")]
+        //[Authorize(Roles = "manufacturer")]
+        //public async Task<IActionResult> GetManufacturerTicketStats()
+        //{
+        //    try
+        //    {
+        //        var manufacturerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        //        var stats = await _service.GetManufacturerTicketStatsAsync(manufacturerId);
+                
+        //        _logger.LogInformation("Manufacturer {ManufacturerId} retrieved ticket statistics", manufacturerId);
+                
+        //        return Ok(ApiResponse<object>.SuccessResponse(stats, "Statistics retrieved successfully"));
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error retrieving manufacturer ticket statistics");
+        //        return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving statistics"));
+        //    }
+        //}
     }
 }

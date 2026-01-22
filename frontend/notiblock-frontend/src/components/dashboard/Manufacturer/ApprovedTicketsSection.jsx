@@ -1,21 +1,26 @@
 import { useState, useEffect } from 'react';
-import { getTicketsByStatus } from '../../../api/resellerTickets';
-import { createRecall } from '../../../api/recalls';
+import { getApprovedManufacturerTickets } from '../../../api/regulatorReviews';
+import { createRecall, issueRecallToBlockchain } from '../../../api/recalls';
 import { QRCodeSVG } from 'qrcode.react';
-import { FiAlertTriangle, FiCheckCircle } from 'react-icons/fi';
+import { FiAlertTriangle, FiCheckCircle, FiPackage, FiExternalLink } from 'react-icons/fi';
+
+const SEPOLIA_EXPLORER_URL = 'https://sepolia.etherscan.io/tx/';
 
 export default function ApprovedTicketsSection() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [recallForm, setRecallForm] = useState({
     reason: '',
     actionRequired: '',
   });
   const [recallData, setRecallData] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isIssuingToBlockchain, setIsIssuingToBlockchain] = useState(false);
   const [status, setStatus] = useState(null);
+  const [blockchainData, setBlockchainData] = useState(null);
 
   useEffect(() => {
     fetchApprovedTickets();
@@ -24,8 +29,7 @@ export default function ApprovedTicketsSection() {
   const fetchApprovedTickets = async () => {
     try {
       setLoading(true);
-      const response = await getTicketsByStatus('1'); // Status 1 = Approved
-      // Handle paginated response format: { success, data: { items, totalCount, ... } }
+      const response = await getApprovedManufacturerTickets();
       const items = response?.data?.items || response?.items || response || [];
       setTickets(Array.isArray(items) ? items : []);
     } catch (err) {
@@ -36,6 +40,18 @@ export default function ApprovedTicketsSection() {
     }
   };
 
+  const getProductsFromTicket = (ticket) => {
+    const consumerReports = ticket?.consumerReports || [];
+    const reportsArray = Array.isArray(consumerReports) ? consumerReports : [consumerReports];
+
+    const products = reportsArray.flatMap(report => {
+      const reportProducts = report?.product || [];
+      return Array.isArray(reportProducts) ? reportProducts : [reportProducts];
+    }).filter(Boolean); 
+
+    return products;
+  };
+
   const handleCreateRecall = async (e) => {
     e.preventDefault();
     
@@ -44,32 +60,30 @@ export default function ApprovedTicketsSection() {
       return;
     }
 
+    if (!selectedProduct) {
+      setStatus('Please select a product.');
+      return;
+    }
+
     setIsSubmitting(true);
     setStatus(null);
 
     try {
       const recallPayload = {
-        productSerialNumber: selectedTicket.productSerialNumber || selectedTicket.serialNumber,
+        productId: selectedProduct.serialNumber,
         reason: recallForm.reason.trim(),
         actionRequired: recallForm.actionRequired.trim(),
       };
 
       const result = await createRecall(recallPayload);
+      const recallId = result.id || result.data?.id;
       
-      const qrPayload = JSON.stringify({
-        recallId: result.id || result.data?.id,
-        productSerial: selectedTicket.productSerialNumber || selectedTicket.serialNumber,
-        recallReason: recallForm.reason,
-        actionRequired: recallForm.actionRequired,
-        timestamp: new Date().toISOString(),
-      });
-
       setRecallData({
         recall: result,
-        qrData: qrPayload,
+        recallId: recallId,
       });
       
-      setStatus('Recall created successfully!');
+      setStatus('Recall created successfully! Now issue it to the blockchain for permanent verification.');
       fetchApprovedTickets();
     } catch (err) {
       console.error('Error creating recall:', err);
@@ -79,16 +93,63 @@ export default function ApprovedTicketsSection() {
     }
   };
 
+  const handleIssueToBlockchain = async () => {
+    if (!recallData?.recallId) {
+      setStatus('No recall ID found. Please create a recall first.');
+      return;
+    }
+
+    setIsIssuingToBlockchain(true);
+    setStatus('Issuing recall to blockchain...');
+
+    try {
+      const blockchainResult = await issueRecallToBlockchain(recallData.recallId);
+      
+      const txHash = blockchainResult.transactionHash || blockchainResult.data?.transactionHash;
+      const explorerUrl = `${SEPOLIA_EXPLORER_URL}${txHash}`;
+
+      const blockchainInfo = {
+        transactionHash: txHash,
+        blockNumber: blockchainResult.blockNumber || blockchainResult.data?.blockNumber,
+        timestamp: blockchainResult.timestamp || blockchainResult.data?.timestamp,
+        explorerUrl: explorerUrl,
+      };
+
+      setBlockchainData(blockchainInfo);
+
+      // Create QR code with explorer URL
+      const qrPayload = explorerUrl;
+
+      setRecallData({
+        ...recallData,
+        qrData: qrPayload,
+        blockchainInfo: blockchainInfo,
+      });
+
+      setStatus('Recall successfully issued to blockchain! 🎉');
+
+    } catch (err) {
+      console.error('Error issuing to blockchain:', err);
+      setStatus(err.message || 'Error issuing recall to blockchain. Please try again.');
+    } finally {
+      setIsIssuingToBlockchain(false);
+    }
+  };
+
   const handleSelectTicket = (ticket) => {
     setSelectedTicket(ticket);
+    setSelectedProduct(null);
     setRecallForm({ reason: '', actionRequired: '' });
     setRecallData(null);
+    setBlockchainData(null);
     setStatus(null);
   };
 
   const handleCancel = () => {
     setSelectedTicket(null);
+    setSelectedProduct(null);
     setRecallData(null);
+    setBlockchainData(null);
     setStatus(null);
   };
 
@@ -101,6 +162,8 @@ export default function ApprovedTicketsSection() {
   }
 
   if (selectedTicket) {
+    const products = getProductsFromTicket(selectedTicket);
+
     return (
       <div className="max-w-3xl mx-auto">
         <div className="bg-white p-6 rounded-lg shadow border">
@@ -115,18 +178,53 @@ export default function ApprovedTicketsSection() {
           </div>
           
           <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded">
-            <h3 className="font-semibold mb-2 flex items-center gap-2">
+            <h3 className="font-semibold mb-3 flex items-center gap-2">
               <FiAlertTriangle className="text-yellow-600" />
               Ticket Details
             </h3>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="font-medium">Product Serial:</span>
-                <p className="text-gray-700">{selectedTicket.productSerialNumber || 'N/A'}</p>
+            
+            {/* Products Section */}
+            <div className="mb-4">
+              <span className="block font-medium mb-2">Affected Products:</span>
+              <div className="flex flex-wrap gap-2">
+                {products.length > 0 ? (
+                  products.map((product, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedProduct(product)}
+                      disabled={!!recallData}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all ${
+                        selectedProduct?.serialNumber === product.serialNumber
+                          ? 'border-blue-500 bg-blue-50 text-blue-800'
+                          : 'border-gray-300 bg-white hover:border-blue-300 hover:bg-blue-50'
+                      } ${recallData ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <FiPackage className={selectedProduct?.serialNumber === product.serialNumber ? 'text-blue-600' : 'text-gray-600'} />
+                      <div className="text-left">
+                        <div className="font-medium text-sm">{product.model || product.name || 'Unknown Product'}</div>
+                        <div className="text-xs text-gray-600">S/N: {product.serialNumber}</div>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-sm">No products associated with this ticket</p>
+                )}
               </div>
+              {selectedProduct && (
+                <p className="mt-2 text-sm text-blue-700 flex items-center gap-1">
+                  <FiCheckCircle /> Selected: {selectedProduct.model || selectedProduct.name} ({selectedProduct.serialNumber})
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm border-t pt-3">
               <div>
                 <span className="font-medium">Category:</span>
                 <p className="text-gray-700">{selectedTicket.category || 'N/A'}</p>
+              </div>
+              <div>
+                <span className="font-medium">Status:</span>
+                <p className="text-gray-700">{selectedTicket.status || 'N/A'}</p>
               </div>
               <div className="col-span-2">
                 <span className="font-medium">Issue Description:</span>
@@ -145,6 +243,7 @@ export default function ApprovedTicketsSection() {
                 placeholder="Describe the reason for the recall..."
                 rows="4"
                 required
+                disabled={!!recallData}
               />
             </div>
 
@@ -157,29 +256,64 @@ export default function ApprovedTicketsSection() {
                 placeholder="What action should consumers take?"
                 rows="4"
                 required
+                disabled={!!recallData}
               />
             </div>
 
             <div className="flex gap-3">
-              <button 
-                type="submit" 
-                disabled={isSubmitting}
-                className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <FiAlertTriangle />
-                {isSubmitting ? 'Issuing Recall...' : 'Issue Recall'}
-              </button>
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-              >
-                Cancel
-              </button>
+              {!recallData ? (
+                <>
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting || !selectedProduct}
+                    className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <FiAlertTriangle />
+                    {isSubmitting ? 'Creating Recall...' : 'Create Recall'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleIssueToBlockchain}
+                    disabled={isIssuingToBlockchain || !!blockchainData}
+                    className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isIssuingToBlockchain ? (
+                      <>⏳ Issuing to Blockchain...</>
+                    ) : blockchainData ? (
+                      <>✓ Issued to Blockchain</>
+                    ) : (
+                      <>🔗 Issue to Blockchain</>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                  >
+                    Done
+                  </button>
+                </>
+              )}
             </div>
 
             {status && (
-              <div className={`p-3 rounded ${status.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+              <div className={`p-3 rounded ${
+                status.includes('Error') || status.includes('Please') 
+                  ? 'bg-red-50 text-red-700' 
+                  : status.includes('successfully') || status.includes('🎉')
+                  ? 'bg-green-50 text-green-700'
+                  : 'bg-blue-50 text-blue-700'
+              }`}>
                 {status}
               </div>
             )}
@@ -194,33 +328,64 @@ export default function ApprovedTicketsSection() {
             </div>
             
             <div className="mb-6 space-y-2">
-              <p><strong>Recall ID:</strong> {recallData.recall.id || recallData.recall.data?.id}</p>
-              <p><strong>Product Serial:</strong> {selectedTicket.productSerialNumber}</p>
+              <p><strong>Recall ID:</strong> {recallData.recallId}</p>
+              <p><strong>Product:</strong> {selectedProduct.model || selectedProduct.name}</p>
+              <p><strong>Product Serial:</strong> {selectedProduct.serialNumber}</p>
               <p><strong>Status:</strong> <span className="text-orange-600">Active</span></p>
               <p><strong>Created:</strong> {new Date().toLocaleString()}</p>
             </div>
 
-            <div className="text-center p-6 bg-gray-50 rounded">
-              <h4 className="font-medium mb-3">QR Code for Recall Information</h4>
-              <div className="inline-block p-4 bg-white border-2 border-gray-300 rounded">
-                <QRCodeSVG value={recallData.qrData} size={200} />
+            {blockchainData && (
+              <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded">
+                <h4 className="font-semibold mb-2 text-purple-800 flex items-center gap-2">
+                  🔗 Blockchain Verification
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <strong>Transaction Hash:</strong>
+                    <p className="font-mono text-xs break-all mt-1">{blockchainData.transactionHash}</p>
+                  </div>
+                  <p><strong>Block Number:</strong> {blockchainData.blockNumber}</p>
+                  <p><strong>Timestamp:</strong> {new Date(blockchainData.timestamp).toLocaleString()}</p>
+                  <a
+                    href={blockchainData.explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-purple-700 hover:text-purple-900 font-medium mt-2"
+                  >
+                    <FiExternalLink />
+                    View on Sepolia Etherscan
+                  </a>
+                  <p className="text-green-700 font-medium mt-2">✓ Recall is permanently recorded on the blockchain</p>
+                </div>
               </div>
-              <p className="text-xs mt-3 text-gray-600">
-                Scan this QR code to view recall details
-              </p>
-            </div>
+            )}
 
-            <div className="mt-6 text-center">
-              <button
-                onClick={() => {
-                  setSelectedTicket(null);
-                  setRecallData(null);
-                }}
-                className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
-              >
-                Back to Approved Tickets
-              </button>
-            </div>
+            {blockchainData && recallData.qrData && (
+              <div className="text-center p-6 bg-gray-50 rounded">
+                <h4 className="font-medium mb-3">QR Code - Scan to View on Blockchain Explorer</h4>
+                <div className="inline-block p-4 bg-white border-2 border-gray-300 rounded">
+                  <QRCodeSVG value={recallData.qrData} size={200} />
+                </div>
+                <p className="text-xs mt-3 text-gray-600">
+                  Scan this QR code to view the transaction on Sepolia Etherscan
+                </p>
+                <p className="text-xs mt-1 text-purple-600 font-mono break-all">
+                  {recallData.qrData}
+                </p>
+              </div>
+            )}
+
+            {!blockchainData && (
+              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded text-center">
+                <p className="text-sm text-gray-700 mb-3">
+                  ⚠️ This recall has not been issued to the blockchain yet.
+                </p>
+                <p className="text-xs text-gray-600">
+                  Click "Issue to Blockchain" above to ensure permanent verification and generate the QR code.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -247,11 +412,13 @@ export default function ApprovedTicketsSection() {
         </div>
       ) : (
         <div className="space-y-4">
-          {tickets.map((ticket) => (
-            <div key={ticket.id} className="bg-white p-5 rounded-lg shadow border hover:border-blue-300 transition-colors">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
+          {tickets.map((ticket) => {
+            const products = getProductsFromTicket(ticket);
+            
+            return (
+              <div key={ticket.id} className="bg-white p-5 rounded-lg shadow border hover:border-blue-300 transition-colors">
+                <div className="mb-3">
+                  <div className="flex items-center gap-2 mb-3">
                     <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded">
                       {ticket.status}
                     </span>
@@ -259,22 +426,46 @@ export default function ApprovedTicketsSection() {
                       {ticket.category}
                     </span>
                   </div>
-                  <p className="mb-1"><strong>Product Serial:</strong> {ticket.productSerialNumber || 'N/A'}</p>
-                  <p className="mb-1"><strong>Description:</strong> {ticket.description}</p>
+                  
+                  {/* Products Display */}
+                  <div className="mb-3">
+                    <span className="text-sm font-medium text-gray-700 block mb-2">Affected Products:</span>
+                    <div className="flex flex-wrap gap-2">
+                      {products.length > 0 ? (
+                        products.map((product, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                          >
+                            <FiPackage className="text-gray-600" />
+                            <div>
+                              <span className="font-medium">{product.model || product.name || 'Unknown'}</span>
+                              <span className="text-gray-500 ml-2 text-xs">S/N: {product.serialNumber}</span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <span className="text-gray-400 text-sm">No products listed</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="mb-2"><strong>Description:</strong> {ticket.description}</p>
                   <p className="text-sm text-gray-600">
                     <strong>Approved:</strong> {new Date(ticket.updatedAt || ticket.createdAt).toLocaleDateString()}
                   </p>
                 </div>
+                
                 <button
                   onClick={() => handleSelectTicket(ticket)}
-                  className="ml-4 flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
                 >
                   <FiAlertTriangle />
                   Issue Recall
                 </button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

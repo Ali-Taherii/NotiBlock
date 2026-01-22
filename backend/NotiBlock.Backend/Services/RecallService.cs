@@ -9,10 +9,12 @@ namespace NotiBlock.Backend.Services
     public class RecallService(
         AppDbContext context,
         IBlockchainService blockchainService,
+        INotificationService notificationService,
         ILogger<RecallService> logger) : IRecallService
     {
         private readonly AppDbContext _context = context;
         private readonly IBlockchainService _blockchainService = blockchainService;
+        private readonly INotificationService _notificationService = notificationService;
         private readonly ILogger<RecallService> _logger = logger;
 
         public async Task<RecallResponseDTO> CreateRecallAsync(RecallCreateDTO dto, Guid manufacturerId)
@@ -76,6 +78,9 @@ namespace NotiBlock.Backend.Services
             _logger.LogInformation("Recall {RecallId} created for product {ProductId} by manufacturer {ManufacturerId}",
                 recall.Id, recall.ProductSerialNumber, manufacturerId);
 
+            // ===== NOTIFICATIONS =====
+            await SendRecallCreatedNotificationsAsync(recall.Id, manufacturerId);
+
             return await GetRecallResponseDto(recall.Id);
         }
 
@@ -123,6 +128,19 @@ namespace NotiBlock.Backend.Services
                 _logger.LogInformation("Recall {RecallId} successfully issued to blockchain. TxHash: {TxHash}",
                     recallId, blockchainData.TransactionHash);
 
+                // ===== NOTIFICATION =====
+                await _notificationService.CreateNotificationAsync(new NotificationCreateDTO
+                {
+                    RecipientId = manufacturerId,
+                    RecipientType = "manufacturer",
+                    Type = NotificationType.Info,
+                    Title = "Recall Issued to Blockchain",
+                    Message = $"Your recall has been successfully issued to the blockchain. Transaction Hash: {blockchainData.TransactionHash}",
+                    RelatedEntityId = recallId,
+                    RelatedEntityType = "recall",
+                    Priority = NotificationPriority.Normal
+                });
+
                 return blockchainData;
             }
             catch (Exception ex)
@@ -169,6 +187,9 @@ namespace NotiBlock.Backend.Services
 
                 _logger.LogInformation("Recall {RecallId} status updated to {NewStatus} on blockchain. TxHash: {TxHash}",
                     recallId, newStatus, blockchainData.TransactionHash);
+
+                // ===== NOTIFICATION =====
+                await SendRecallStatusUpdatedNotificationsAsync(recallId, newStatus);
 
                 return blockchainData;
             }
@@ -327,6 +348,9 @@ namespace NotiBlock.Backend.Services
                 throw new UnauthorizedAccessException("You can only update your own recalls");
             }
 
+            var oldStatus = recall.Status;
+            var statusChanged = false;
+
             if (!string.IsNullOrWhiteSpace(dto.Reason))
             {
                 recall.Reason = dto.Reason.Trim();
@@ -337,9 +361,11 @@ namespace NotiBlock.Backend.Services
                 recall.ActionRequired = dto.ActionRequired.Trim();
             }
 
-            if (dto.Status.HasValue)
+            if (dto.Status.HasValue && dto.Status.Value != oldStatus)
             {
+                statusChanged = true;
                 recall.Status = dto.Status.Value;
+                
                 if (dto.Status == RecallStatus.Resolved && recall.ResolvedAt == null)
                 {
                     recall.ResolvedAt = DateTime.UtcNow;
@@ -361,6 +387,12 @@ namespace NotiBlock.Backend.Services
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Recall {RecallId} updated by manufacturer {UserId}", id, manufacturerId);
+
+            // ===== NOTIFICATION (only if status changed) =====
+            if (statusChanged)
+            {
+                await SendRecallStatusUpdatedNotificationsAsync(id, recall.Status.ToString());
+            }
 
             return await GetRecallResponseDto(id);
         }
@@ -419,7 +451,177 @@ namespace NotiBlock.Backend.Services
 
             _logger.LogInformation("Recall {RecallId} resolved by manufacturer {UserId}", id, manufacturerId);
 
+            // ===== NOTIFICATION =====
+            await SendRecallResolvedNotificationsAsync(id);
+
             return true;
+        }
+
+        // ===== NOTIFICATION HELPER METHODS =====
+
+        private async Task SendRecallCreatedNotificationsAsync(Guid recallId, Guid manufacturerId)
+        {
+            var recall = await _context.Recalls
+                .FirstOrDefaultAsync(r => r.Id == recallId);
+
+            if (recall == null) return;
+
+            var notifications = new List<NotificationCreateDTO>();
+
+            // 1. Notify manufacturer (confirmation)
+            notifications.Add(new NotificationCreateDTO
+            {
+                RecipientId = manufacturerId,
+                RecipientType = "manufacturer",
+                Type = NotificationType.Info,
+                Title = "Recall Created Successfully",
+                Message = $"Your recall for product {recall.ProductSerialNumber} has been created. Reason: {recall.Reason}",
+                RelatedEntityId = recallId,
+                RelatedEntityType = "recall",
+                Priority = NotificationPriority.Normal
+            });
+
+            // 2. Notify affected consumers (products with same model)
+            var affectedConsumers = await _context.Products
+                .Where(p => p.Model == recall.ProductSerialNumber && p.OwnerId.HasValue && !p.IsDeleted)
+                .Select(p => new { p.OwnerId, p.SerialNumber })
+                .Distinct()
+                .ToListAsync();
+
+            foreach (var consumer in affectedConsumers)
+            {
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = consumer.OwnerId!.Value,
+                    RecipientType = "consumer",
+                    Type = NotificationType.RecallIssued,
+                    Title = "CRITICAL: Product Recall Alert",
+                    Message = $"A recall has been issued for your product ({consumer.SerialNumber}). Reason: {recall.Reason}. Action required: {recall.ActionRequired}",
+                    RelatedEntityId = recallId,
+                    RelatedEntityType = "recall",
+                    Priority = NotificationPriority.Critical,
+                    ExpiresAt = DateTime.UtcNow.AddDays(90)
+                });
+            }
+
+            // 3. Notify resellers who distribute this product model
+            var affectedResellers = await _context.Products
+                .Where(p => p.Model == recall.ProductSerialNumber && p.ResellerId.HasValue && !p.IsDeleted)
+                .Select(p => p.ResellerId!.Value)
+                .Distinct()
+                .ToListAsync();
+
+            foreach (var resellerId in affectedResellers)
+            {
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = resellerId,
+                    RecipientType = "reseller",
+                    Type = NotificationType.RecallIssued,
+                    Title = "Product Recall Alert",
+                    Message = $"A recall has been issued for product model {recall.ProductSerialNumber} that you distribute. Reason: {recall.Reason}. Please inform your customers.",
+                    RelatedEntityId = recallId,
+                    RelatedEntityType = "recall",
+                    Priority = NotificationPriority.High,
+                    ExpiresAt = DateTime.UtcNow.AddDays(90)
+                });
+            }
+
+            // 4. Notify all regulators (oversight)
+            var regulators = await _context.Regulators
+                .Where(r => !r.IsDeleted)
+                .Select(r => r.Id)
+                .ToListAsync();
+
+            foreach (var regulatorId in regulators)
+            {
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = regulatorId,
+                    RecipientType = "regulator",
+                    Type = NotificationType.Info,
+                    Title = "New Recall Issued",
+                    Message = $"Manufacturer has issued a recall for product {recall.ProductSerialNumber}. Reason: {recall.Reason}",
+                    RelatedEntityId = recallId,
+                    RelatedEntityType = "recall",
+                    Priority = NotificationPriority.Normal
+                });
+            }
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Sent {Count} notifications for recall {RecallId} creation", 
+                    notifications.Count, recallId);
+            }
+        }
+
+        private async Task SendRecallStatusUpdatedNotificationsAsync(Guid recallId, string newStatus)
+        {
+            var recall = await _context.Recalls
+                .FirstOrDefaultAsync(r => r.Id == recallId);
+
+            if (recall == null) return;
+
+            // Notify affected consumers
+            var affectedConsumers = await _context.Products
+                .Where(p => p.Model == recall.ProductSerialNumber && p.OwnerId.HasValue && !p.IsDeleted)
+                .Select(p => new { p.OwnerId, p.SerialNumber })
+                .Distinct()
+                .ToListAsync();
+
+            var notifications = affectedConsumers.Select(consumer => new NotificationCreateDTO
+            {
+                RecipientId = consumer.OwnerId!.Value,
+                RecipientType = "consumer",
+                Type = NotificationType.Info,
+                Title = "Recall Status Updated",
+                Message = $"The recall for your product ({consumer.SerialNumber}) status has been updated to: {newStatus}",
+                RelatedEntityId = recallId,
+                RelatedEntityType = "recall",
+                Priority = NotificationPriority.High
+            }).ToList();
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Notified {Count} consumers about recall {RecallId} status update to {Status}",
+                    notifications.Count, recallId, newStatus);
+            }
+        }
+
+        private async Task SendRecallResolvedNotificationsAsync(Guid recallId)
+        {
+            var recall = await _context.Recalls
+                .FirstOrDefaultAsync(r => r.Id == recallId);
+
+            if (recall == null) return;
+
+            // Notify affected consumers
+            var affectedConsumers = await _context.Products
+                .Where(p => p.Model == recall.ProductSerialNumber && p.OwnerId.HasValue && !p.IsDeleted)
+                .Select(p => new { p.OwnerId, p.SerialNumber })
+                .Distinct()
+                .ToListAsync();
+
+            var notifications = affectedConsumers.Select(consumer => new NotificationCreateDTO
+            {
+                RecipientId = consumer.OwnerId!.Value,
+                RecipientType = "consumer",
+                Type = NotificationType.Info,
+                Title = "Recall Resolved",
+                Message = $"Good news! The recall for your product ({consumer.SerialNumber}) has been marked as resolved.",
+                RelatedEntityId = recallId,
+                RelatedEntityType = "recall",
+                Priority = NotificationPriority.High
+            }).ToList();
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Notified {Count} consumers about recall {RecallId} resolution",
+                    notifications.Count, recallId);
+            }
         }
 
         private async Task<RecallResponseDTO> GetRecallResponseDto(Guid id)

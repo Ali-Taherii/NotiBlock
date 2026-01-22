@@ -16,6 +16,8 @@ namespace NotiBlock.Backend.Services
         {
             // Validate ticket exists
             var ticket = await _context.ResellerTickets
+                .Include(t => t.Reseller)
+                .Include(t => t.ConsumerReports)
                 .FirstOrDefaultAsync(t => t.Id == dto.TicketId);
 
             if (ticket == null)
@@ -55,6 +57,8 @@ namespace NotiBlock.Backend.Services
 
             _context.RegulatorReviews.Add(review);
 
+            var oldStatus = ticket.Status;
+
             // Update ticket status based on decision
             switch (dto.Decision)
             {
@@ -79,11 +83,11 @@ namespace NotiBlock.Backend.Services
 
             await _context.SaveChangesAsync();
 
-            // Notify reseller of ticket status change
-            await _notificationService.NotifyTicketStatusChangeAsync(dto.TicketId, ticket.Status);
-
             _logger.LogInformation("Review {ReviewId} created by regulator {RegulatorId} for ticket {TicketId} with decision {Decision}",
                 review.Id, regulatorId, dto.TicketId, dto.Decision);
+
+            // ===== NOTIFICATIONS =====
+            await SendReviewCreatedNotificationsAsync(dto.TicketId, regulatorId, dto.Decision, dto.Notes, ticket.ResellerId);
 
             return review;
         }
@@ -111,6 +115,7 @@ namespace NotiBlock.Backend.Services
         {
             var review = await _context.RegulatorReviews
                 .Include(r => r.Ticket)
+                    .ThenInclude(t => t.Reseller)
                 .FirstOrDefaultAsync(r => r.Id == id)
                 ?? throw new KeyNotFoundException($"Review with ID {id} not found");
 
@@ -155,6 +160,9 @@ namespace NotiBlock.Backend.Services
                 }
 
                 review.Ticket.UpdatedAt = DateTime.UtcNow;
+
+                // ===== NOTIFICATION (only if decision changed) =====
+                await SendReviewUpdatedNotificationsAsync(review.Ticket.Id, regulatorId, oldDecision, dto.Decision, dto.Notes, review.Ticket.ResellerId);
             }
 
             await _context.SaveChangesAsync();
@@ -170,6 +178,7 @@ namespace NotiBlock.Backend.Services
             var review = await _context.RegulatorReviews
                 .IgnoreQueryFilters()
                 .Include(r => r.Ticket)
+                    .ThenInclude(t => t.Reseller)
                 .FirstOrDefaultAsync(r => r.Id == id);
 
             if (review == null)
@@ -217,6 +226,19 @@ namespace NotiBlock.Backend.Services
 
             _logger.LogInformation("Review {ReviewId} soft deleted by regulator {RegulatorId} at {DeletedAt}",
                 id, regulatorId, review.DeletedAt);
+
+            // ===== NOTIFICATION =====
+            await _notificationService.CreateNotificationAsync(new NotificationCreateDTO
+            {
+                RecipientId = review.Ticket.ResellerId,
+                RecipientType = "reseller",
+                Type = NotificationType.Info,
+                Title = "Review Deleted - Ticket Status Reverted",
+                Message = $"A regulator has deleted their review for your ticket. The ticket status has been reverted to Pending for re-evaluation.",
+                RelatedEntityId = review.Ticket.Id,
+                RelatedEntityType = "ticket",
+                Priority = NotificationPriority.High
+            });
 
             return true;
         }
@@ -312,6 +334,8 @@ namespace NotiBlock.Backend.Services
         {
             var ticket = await _context.ResellerTickets
                 .Include(t => t.RegulatorReviews)
+                .Include(t => t.ConsumerReports)
+                    .ThenInclude(cr => cr.Product)
                 .FirstOrDefaultAsync(t => t.Id == ticketId);
 
             if (ticket == null)
@@ -340,13 +364,16 @@ namespace NotiBlock.Backend.Services
             }
 
             // Update ticket status
-            ticket.Status = TicketStatus.UnderReview; // Or create a new status like "EscalatedToManufacturer"
+            ticket.Status = TicketStatus.UnderReview;
             ticket.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Ticket {TicketId} escalated to manufacturer by regulator {RegulatorId}",
                 ticketId, regulatorId);
+
+            // ===== NOTIFICATIONS =====
+            await SendTicketEscalatedNotificationsAsync(ticketId, regulatorId, ticket);
 
             return ticket;
         }
@@ -379,6 +406,229 @@ namespace NotiBlock.Backend.Services
                 pendingTickets = pendingTicketsCount,
                 approvalRate = totalReviews > 0 ? Math.Round((double)approvedCount / totalReviews * 100, 2) : 0
             };
+        }
+
+        // ===== NOTIFICATION HELPER METHODS =====
+
+        private async Task SendReviewCreatedNotificationsAsync(
+            Guid ticketId,
+            Guid regulatorId,
+            ReviewDecision decision,
+            string notes,
+            Guid resellerId)
+        {
+            var notifications = new List<NotificationCreateDTO>();
+
+            // Determine message based on decision
+            var (title, message, priority, notificationType) = decision switch
+            {
+                ReviewDecision.Approved => (
+                    "Ticket Approved by Regulator",
+                    $"Your ticket has been approved by a regulator. The ticket can now be escalated to the manufacturer for further action.",
+                    NotificationPriority.High,
+                    NotificationType.TicketApproved
+                ),
+                ReviewDecision.Rejected => (
+                    "Ticket Rejected by Regulator",
+                    $"Your ticket has been rejected by a regulator. Reason: {notes}. Please review and address the feedback.",
+                    NotificationPriority.High,
+                    NotificationType.TicketRejected
+                ),
+                ReviewDecision.NeedsMoreInfo => (
+                    "Additional Information Required for Ticket",
+                    $"A regulator has requested additional information for your ticket. Please review: {notes}",
+                    NotificationPriority.High,
+                    NotificationType.Info
+                ),
+                _ => (
+                    "Ticket Reviewed by Regulator",
+                    $"Your ticket has been reviewed by a regulator.",
+                    NotificationPriority.Normal,
+                    NotificationType.ReviewSubmitted
+                )
+            };
+
+            // Notify reseller
+            notifications.Add(new NotificationCreateDTO
+            {
+                RecipientId = resellerId,
+                RecipientType = "reseller",
+                Type = notificationType,
+                Title = title,
+                Message = message,
+                RelatedEntityId = ticketId,
+                RelatedEntityType = "ticket",
+                Priority = priority
+            });
+
+            // Get affected consumers from related reports and notify them
+            var consumerReports = await _context.ConsumerReports
+                .Where(cr => cr.ResellerTicketId == ticketId)
+                .Select(cr => new { cr.ConsumerId, cr.SerialNumber })
+                .Distinct()
+                .ToListAsync();
+
+            foreach (var report in consumerReports)
+            {
+                var consumerMessage = decision switch
+                {
+                    ReviewDecision.Approved => $"The ticket related to your product report ({report.SerialNumber}) has been approved by regulators and is being escalated for resolution.",
+                    ReviewDecision.Rejected => $"The ticket related to your product report ({report.SerialNumber}) has been rejected. The reseller will be notified to address your concerns directly.",
+                    ReviewDecision.NeedsMoreInfo => $"Additional information is being requested for the ticket related to your product report ({report.SerialNumber}). You may be contacted for further details.",
+                    _ => $"The ticket related to your product report ({report.SerialNumber}) has been reviewed by regulators."
+                };
+
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = report.ConsumerId,
+                    RecipientType = "consumer",
+                    Type = NotificationType.Info,
+                    Title = "Update on Your Product Report",
+                    Message = consumerMessage,
+                    RelatedEntityId = ticketId,
+                    RelatedEntityType = "ticket",
+                    Priority = NotificationPriority.Normal
+                });
+            }
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Sent {Count} notifications for review creation on ticket {TicketId}",
+                    notifications.Count, ticketId);
+            }
+        }
+
+        private async Task SendReviewUpdatedNotificationsAsync(
+            Guid ticketId,
+            Guid regulatorId,
+            ReviewDecision oldDecision,
+            ReviewDecision newDecision,
+            string notes,
+            Guid resellerId)
+        {
+            var notifications = new List<NotificationCreateDTO>();
+
+            // Notify reseller
+            var (title, message, priority) = newDecision switch
+            {
+                ReviewDecision.Approved => (
+                    "Ticket Review Updated - Now Approved",
+                    $"A regulator has updated their review for your ticket from {oldDecision} to Approved. The ticket can now be escalated to the manufacturer.",
+                    NotificationPriority.High
+                ),
+                ReviewDecision.Rejected => (
+                    "Ticket Review Updated - Now Rejected",
+                    $"A regulator has updated their review for your ticket from {oldDecision} to Rejected. Reason: {notes}",
+                    NotificationPriority.High
+                ),
+                ReviewDecision.NeedsMoreInfo => (
+                    "Ticket Review Updated - More Information Needed",
+                    $"A regulator has updated their review for your ticket. Additional information is required: {notes}",
+                    NotificationPriority.High
+                ),
+                _ => (
+                    "Ticket Review Updated",
+                    $"A regulator has updated their review for your ticket from {oldDecision} to {newDecision}.",
+                    NotificationPriority.Normal
+                )
+            };
+
+            notifications.Add(new NotificationCreateDTO
+            {
+                RecipientId = resellerId,
+                RecipientType = "reseller",
+                Type = NotificationType.Info,
+                Title = title,
+                Message = message,
+                RelatedEntityId = ticketId,
+                RelatedEntityType = "ticket",
+                Priority = priority
+            });
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Sent {Count} notifications for review update on ticket {TicketId}",
+                    notifications.Count, ticketId);
+            }
+        }
+
+        private async Task SendTicketEscalatedNotificationsAsync(Guid ticketId, Guid regulatorId, ResellerTicket ticket)
+        {
+            var notifications = new List<NotificationCreateDTO>();
+
+            // Get unique manufacturer IDs from consumer reports
+            var manufacturerIds = await _context.ConsumerReports
+                .Where(cr => cr.ResellerTicketId == ticketId)
+                .Include(cr => cr.Product)
+                .Select(cr => cr.Product!.ManufacturerId)
+                .Distinct()
+                .ToListAsync();
+
+            // Notify manufacturers
+            foreach (var manufacturerId in manufacturerIds)
+            {
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = manufacturerId,
+                    RecipientType = "manufacturer",
+                    Type = NotificationType.Warning,
+                    Title = "Ticket Escalated to You by Regulator",
+                    Message = $"A {ticket.Priority} priority ticket (Category: {ticket.Category}) has been escalated to you by regulators for immediate attention and resolution. Please review the associated consumer reports.",
+                    RelatedEntityId = ticketId,
+                    RelatedEntityType = "ticket",
+                    Priority = ticket.Priority switch
+                    {
+                        2 => NotificationPriority.High,
+                        3 => NotificationPriority.Critical,
+                        _ => NotificationPriority.Normal
+
+                    }
+                });
+            }
+
+            // Notify reseller
+            notifications.Add(new NotificationCreateDTO
+            {
+                RecipientId = ticket.ResellerId,
+                RecipientType = "reseller",
+                Type = NotificationType.Info,
+                Title = "Your Ticket Has Been Escalated",
+                Message = $"Your ticket (Category: {ticket.Category}) has been escalated to the manufacturer by a regulator. You will be notified of any updates.",
+                RelatedEntityId = ticketId,
+                RelatedEntityType = "ticket",
+                Priority = NotificationPriority.Normal
+            });
+
+            // Notify affected consumers
+            var consumerReports = await _context.ConsumerReports
+                .Where(cr => cr.ResellerTicketId == ticketId)
+                .Select(cr => new { cr.ConsumerId, cr.SerialNumber })
+                .Distinct()
+                .ToListAsync();
+
+            foreach (var report in consumerReports)
+            {
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = report.ConsumerId,
+                    RecipientType = "consumer",
+                    Type = NotificationType.Info,
+                    Title = "Your Report Has Been Escalated",
+                    Message = $"The ticket related to your product report ({report.SerialNumber}) has been escalated to the manufacturer by regulators for resolution.",
+                    RelatedEntityId = ticketId,
+                    RelatedEntityType = "ticket",
+                    Priority = NotificationPriority.High
+                });
+            }
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Sent {Count} notifications for ticket {TicketId} escalation to manufacturer",
+                    notifications.Count, ticketId);
+            }
         }
     }
 }

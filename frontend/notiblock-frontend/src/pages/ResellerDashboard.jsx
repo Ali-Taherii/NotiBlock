@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FiPackage, FiFileText, FiCheckCircle } from 'react-icons/fi';
 import LogoutButton from '../components/shared/LogoutButton';
+import NotificationDropdown from '../components/shared/NotificationDropdown';
 import ProductsSection from '../components/dashboard/Reseller/ProductsSection';
 import ConsumerReportsSection from '../components/dashboard/Reseller/ConsumerReportsSection';
 import MyTicketsSection from '../components/dashboard/Reseller/MyTicketsSection';
@@ -19,7 +20,10 @@ export default function ResellerDashboard() {
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">Reseller Dashboard</h1>
-          <LogoutButton />
+          <div className="flex items-center gap-3">
+            <NotificationDropdown />
+            <LogoutButton />
+          </div>
         </div>
 
         {/* Tab Navigation */}

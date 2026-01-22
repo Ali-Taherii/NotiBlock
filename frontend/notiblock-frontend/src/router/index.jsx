@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Home from "../pages/Home";
 import Recalls from "../pages/Recalls";
 import AuthPage from "../pages/Auth";
+import Notifications from "../pages/Notifications";
 import ManufacturerDashboard from "../pages/ManufacturerDashboard";
 import ConsumerDashboard from "../pages/ConsumerDashboard";
 import RegulatorDashboard from "../pages/RegulatorDashboard";
@@ -14,9 +15,15 @@ export default function AppRouter() {
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
-        {/* <Route path="/not-found" element={<NotFound />} /> */}
         <Route path="/recalls" element={<Recalls />} />
         <Route path="/auth" element={<AuthPage />} />
+        
+        {/* Notifications - accessible to all authenticated users */}
+        <Route path="/notifications" element={
+          <ProtectedRoute>
+            <Notifications />
+          </ProtectedRoute>
+        } />
 
         {/* Dashboard routes */}
         <Route path="/manufacturer/dashboard" element={
@@ -40,25 +47,7 @@ export default function AppRouter() {
           </ProtectedRoute>
         } />
 
-        {/* Consumer specific routes */}
-        {/* <Route path="/consumer/report-issue" element={
-          <ProtectedRoute role="consumer">
-            <ReportIssue />
-          </ProtectedRoute>
-        } />
-        <Route path="/consumer/my-tickets" element={
-          <ProtectedRoute role="consumer">
-            <MyTickets />
-          </ProtectedRoute>
-        } />
-        <Route path="/consumer/profile-info" element={
-          <ProtectedRoute role="consumer">
-            <ProfileInfo />
-          </ProtectedRoute>
-        } /> */}
-
-        {/* Catch-all route for 404 */}
-        {/* <Route path="*" element={<NotFound />} /> */}
+        {/* other routes as needed */}
       </Routes>
     </Router>
   );

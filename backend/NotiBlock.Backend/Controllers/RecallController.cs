@@ -22,6 +22,7 @@ namespace NotiBlock.Backend.Controllers
                 var manufacturerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var recall = await _service.CreateRecallAsync(dto, manufacturerId);
                 _logger.LogInformation("Recall created successfully by manufacturer {ManufacturerId}", manufacturerId);
+
                 return CreatedAtAction(nameof(GetRecallById), new { id = recall.Id }, 
                     ApiResponse<object>.SuccessResponse(recall, "Recall created successfully"));
             }

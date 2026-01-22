@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FiFileText, FiClipboard } from 'react-icons/fi';
 import LogoutButton from '../components/shared/LogoutButton';
+import NotificationDropdown from '../components/shared/NotificationDropdown';
 import TicketsSection from '../components/dashboard/Regulator/TicketsSection';
 import MyReviewsSection from '../components/dashboard/Regulator/MyReviewsSection';
 
@@ -17,7 +18,10 @@ export default function RegulatorDashboard() {
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">Regulator Dashboard</h1>
-          <LogoutButton />
+          <div className="flex items-center gap-3">
+            <NotificationDropdown />
+            <LogoutButton />
+          </div>
         </div>
 
         {/* Tab Navigation */}

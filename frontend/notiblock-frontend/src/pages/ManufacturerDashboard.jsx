@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import LogoutButton from '../components/shared/LogoutButton'
+import NotificationDropdown from '../components/shared/NotificationDropdown'
 import ProductsSection from '../components/dashboard/Manufacturer/ProductsSection'
 import ApprovedTicketsSection from '../components/dashboard/Manufacturer/ApprovedTicketsSection'
 import RecallsSection from '../components/dashboard/Manufacturer/RecallsSection'
@@ -33,7 +34,10 @@ export default function ManufacturerDashboard() {
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">Manufacturer Dashboard</h1>
-          <LogoutButton />
+          <div className="flex items-center gap-3">
+            <NotificationDropdown />
+            <LogoutButton />
+          </div>
         </div>
 
         {/* Tabs */}

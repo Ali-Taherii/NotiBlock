@@ -6,10 +6,14 @@ using NotiBlock.Backend.Models;
 
 namespace NotiBlock.Backend.Services
 {
-    public class ConsumerReportService(AppDbContext context, ILogger<ConsumerReportService> logger) : IConsumerReportService
+    public class ConsumerReportService(
+        AppDbContext context, 
+        ILogger<ConsumerReportService> logger,
+        INotificationService notificationService) : IConsumerReportService
     {
         private readonly AppDbContext _context = context;
         private readonly ILogger<ConsumerReportService> _logger = logger;
+        private readonly INotificationService _notificationService = notificationService;
 
         public async Task<ConsumerReport> SubmitReportAsync(ConsumerReportCreateDTO dto, Guid consumerId)
         {
@@ -59,6 +63,9 @@ namespace NotiBlock.Backend.Services
 
             _logger.LogInformation("Report {ReportId} created by consumer {ConsumerId} for product {SerialNumber}",
                 report.Id, consumerId, dto.ProductSerialNumber);
+
+            // ===== NOTIFICATIONS =====
+            await SendReportSubmittedNotificationsAsync(report.Id, consumerId, product);
 
             return report;
         }
@@ -293,7 +300,8 @@ namespace NotiBlock.Backend.Services
                     resellerId, reportId);
                 throw new UnauthorizedAccessException("You can only process reports for products assigned to you");
             }
-            
+
+            var oldStatus = report.Status;
 
             switch (dto.Action)
             {
@@ -372,6 +380,9 @@ namespace NotiBlock.Backend.Services
             report.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
+            // ===== NOTIFICATIONS =====
+            await SendReportStatusChangedNotificationsAsync(reportId, oldStatus, report.Status, dto.Action, resellerId);
+
             return report;
         }
 
@@ -401,86 +412,245 @@ namespace NotiBlock.Backend.Services
         }
 
         public async Task<PagedResultsDTO<ConsumerReportResponseDTO>> GetResellerRelatedReportsAsync(
-    Guid resellerId, 
-    int page, 
-    int pageSize)
-{
-    if (page < 1)
-    {
-        _logger.LogWarning("Invalid page number {Page} requested, defaulting to 1", page);
-        page = 1;
-    }
-
-    if (pageSize < 1 || pageSize > 100)
-    {
-        _logger.LogWarning("Invalid page size {PageSize} requested, defaulting to 20", pageSize);
-        pageSize = 20;
-    }
-
-    // Join ConsumerReports with Products to filter by ResellerId
-    var query = from report in _context.ConsumerReports
-                join product in _context.Products on report.SerialNumber equals product.SerialNumber
-                where product.ResellerId == resellerId
-                orderby report.CreatedAt descending
-                select report;
-
-    var totalCount = await query.CountAsync();
-    
-    // eagerly load Manufacturer safely
-    var reports = await query
-        .Include(r => r.Consumer)
-        .Include(r => r.Product)
-            .ThenInclude(p => p.Manufacturer)
-        .Include(r => r.ResellerTicket)
-        .Skip((page - 1) * pageSize)
-        .Take(pageSize)
-        .ToListAsync();
-
-    _logger.LogInformation(
-        "Retrieved {Count} consumer reports for reseller {ResellerId} (Page {Page} of {TotalPages})",
-        reports.Count, 
-        resellerId, 
-        page, 
-        Math.Ceiling(totalCount / (double)pageSize)
-    );
-
-    return new PagedResultsDTO<ConsumerReportResponseDTO>
-    {
-        Items = [.. reports.Select(MapToResponseDTO)],
-        TotalCount = totalCount,
-        Page = page,
-        PageSize = pageSize
-    };
-}
-
-private ConsumerReportResponseDTO MapToResponseDTO(ConsumerReport report)
-{
-    return new ConsumerReportResponseDTO
-    {
-        Id = report.Id,
-        ConsumerId = report.ConsumerId,
-        ConsumerName = report.Consumer?.Name ?? "Unknown",
-        ConsumerEmail = report.Consumer?.Email ?? string.Empty,
-        SerialNumber = report.SerialNumber,
-        
-        // Add product information
-        Product = report.Product != null ? new ProductBasicInfoDTO
+            Guid resellerId, 
+            int page, 
+            int pageSize)
         {
-            Id = report.Product.Id,
-            SerialNumber = report.Product.SerialNumber,
-            Model = report.Product.Model,
-            ManufacturerName = report.Product.Manufacturer?.CompanyName ?? "Unknown"
-        } : null,
-        
-        Description = report.Description,
-        Status = report.Status,
-        CreatedAt = report.CreatedAt,
-        UpdatedAt = report.UpdatedAt,
-        ResolvedAt = report.ResolvedAt,
-        ResellerTicketId = report.ResellerTicketId,
-        ResolvedBy = report.ResolvedBy,
-        ResolutionNotes = report.ResolutionNotes
-    };
-}
+            if (page < 1)
+            {
+                _logger.LogWarning("Invalid page number {Page} requested, defaulting to 1", page);
+                page = 1;
+            }
+
+            if (pageSize < 1 || pageSize > 100)
+            {
+                _logger.LogWarning("Invalid page size {PageSize} requested, defaulting to 20", pageSize);
+                pageSize = 20;
+            }
+
+            // Join ConsumerReports with Products to filter by ResellerId
+            var query = from report in _context.ConsumerReports
+                        join product in _context.Products on report.SerialNumber equals product.SerialNumber
+                        where product.ResellerId == resellerId
+                        orderby report.CreatedAt descending
+                        select report;
+
+            var totalCount = await query.CountAsync();
+            
+            // eagerly load Manufacturer safely
+            var reports = await query
+                .Include(r => r.Consumer)
+                .Include(r => r.Product)
+                    .ThenInclude(p => p.Manufacturer)
+                .Include(r => r.ResellerTicket)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            _logger.LogInformation(
+                "Retrieved {Count} consumer reports for reseller {ResellerId} (Page {Page} of {TotalPages})",
+                reports.Count, 
+                resellerId, 
+                page, 
+                Math.Ceiling(totalCount / (double)pageSize)
+            );
+
+            return new PagedResultsDTO<ConsumerReportResponseDTO>
+            {
+                Items = [.. reports.Select(MapToResponseDTO)],
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+
+        // ===== NOTIFICATION HELPER METHODS =====
+
+        private async Task SendReportSubmittedNotificationsAsync(Guid reportId, Guid consumerId, Product product)
+        {
+            var notifications = new List<NotificationCreateDTO>();
+
+            // 1. Notify consumer (confirmation)
+            notifications.Add(new NotificationCreateDTO
+            {
+                RecipientId = consumerId,
+                RecipientType = "consumer",
+                Type = NotificationType.ReportSubmitted,
+                Title = "Report Submitted Successfully",
+                Message = $"Your report for product {product.SerialNumber} has been submitted and is pending review.",
+                RelatedEntityId = reportId,
+                RelatedEntityType = "report",
+                Priority = NotificationPriority.Normal
+            });
+
+            // 2. Notify reseller if product is assigned to one
+            if (product.ResellerId.HasValue)
+            {
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = product.ResellerId.Value,
+                    RecipientType = "reseller",
+                    Type = NotificationType.ReportSubmitted,
+                    Title = "New Consumer Report Received",
+                    Message = $"A consumer has submitted a report for product {product.SerialNumber}. Please review and take appropriate action.",
+                    RelatedEntityId = reportId,
+                    RelatedEntityType = "report",
+                    Priority = NotificationPriority.High
+                });
+            }
+
+            // 3. Notify manufacturer (for awareness)
+            notifications.Add(new NotificationCreateDTO
+            {
+                RecipientId = product.ManufacturerId,
+                RecipientType = "manufacturer",
+                Type = NotificationType.ReportSubmitted,
+                Title = "Consumer Report Filed",
+                Message = $"A consumer has reported an issue with product {product.SerialNumber} (Model: {product.Model}).",
+                RelatedEntityId = reportId,
+                RelatedEntityType = "report",
+                Priority = NotificationPriority.Normal
+            });
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Sent {Count} notifications for report {ReportId} submission",
+                    notifications.Count, reportId);
+            }
+        }
+
+        private async Task SendReportStatusChangedNotificationsAsync(
+            Guid reportId, 
+            ReportStatus oldStatus, 
+            ReportStatus newStatus, 
+            ReportAction action,
+            Guid resellerId)
+        {
+            var report = await _context.ConsumerReports
+                .Include(r => r.Product)
+                .FirstOrDefaultAsync(r => r.Id == reportId);
+
+            if (report == null) return;
+
+            var notifications = new List<NotificationCreateDTO>();
+
+            // Determine message based on action
+            var (title, message, priority) = action switch
+            {
+                ReportAction.Review => (
+                    "Report Under Review",
+                    $"Your report for product {report.SerialNumber} is now being reviewed by the reseller.",
+                    NotificationPriority.Normal
+                ),
+                ReportAction.Resolve => (
+                    "Report Resolved",
+                    $"Your report for product {report.SerialNumber} has been resolved. Resolution: {report.ResolutionNotes}",
+                    NotificationPriority.High
+                ),
+                ReportAction.RequestMoreInfo => (
+                    "Additional Information Requested",
+                    $"The reseller has requested more information about your report for product {report.SerialNumber}. Please check the resolution notes.",
+                    NotificationPriority.High
+                ),
+                ReportAction.Escalate => (
+                    "Report Escalated",
+                    $"Your report for product {report.SerialNumber} has been escalated for further investigation.",
+                    NotificationPriority.High
+                ),
+                ReportAction.Close => (
+                    "Report Closed",
+                    $"Your report for product {report.SerialNumber} has been closed.",
+                    NotificationPriority.Normal
+                ),
+                _ => (
+                    "Report Status Updated",
+                    $"Your report for product {report.SerialNumber} status has been updated to {newStatus}.",
+                    NotificationPriority.Normal
+                )
+            };
+
+            // Notify consumer about status change
+            notifications.Add(new NotificationCreateDTO
+            {
+                RecipientId = report.ConsumerId,
+                RecipientType = "consumer",
+                Type = NotificationType.Info,
+                Title = title,
+                Message = message,
+                RelatedEntityId = reportId,
+                RelatedEntityType = "report",
+                Priority = priority
+            });
+
+            // If escalated, notify manufacturer
+            if (action == ReportAction.Escalate && report.Product != null)
+            {
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = report.Product.ManufacturerId,
+                    RecipientType = "manufacturer",
+                    Type = NotificationType.Warning,
+                    Title = "Consumer Report Escalated",
+                    Message = $"A consumer report for product {report.SerialNumber} has been escalated by the reseller for your attention.",
+                    RelatedEntityId = reportId,
+                    RelatedEntityType = "report",
+                    Priority = NotificationPriority.High
+                });
+            }
+
+            // If resolved, also notify manufacturer
+            if (action == ReportAction.Resolve && report.Product != null)
+            {
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = report.Product.ManufacturerId,
+                    RecipientType = "manufacturer",
+                    Type = NotificationType.Info,
+                    Title = "Consumer Report Resolved",
+                    Message = $"A consumer report for product {report.SerialNumber} has been resolved by the reseller.",
+                    RelatedEntityId = reportId,
+                    RelatedEntityType = "report",
+                    Priority = NotificationPriority.Normal
+                });
+            }
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Sent {Count} notifications for report {ReportId} status change from {OldStatus} to {NewStatus}",
+                    notifications.Count, reportId, oldStatus, newStatus);
+            }
+        }
+
+        private ConsumerReportResponseDTO MapToResponseDTO(ConsumerReport report)
+        {
+            return new ConsumerReportResponseDTO
+            {
+                Id = report.Id,
+                ConsumerId = report.ConsumerId,
+                ConsumerName = report.Consumer?.Name ?? "Unknown",
+                ConsumerEmail = report.Consumer?.Email ?? string.Empty,
+                SerialNumber = report.SerialNumber,
+                
+                // Add product information
+                Product = report.Product != null ? new ProductBasicInfoDTO
+                {
+                    Id = report.Product.Id,
+                    SerialNumber = report.Product.SerialNumber,
+                    Model = report.Product.Model,
+                    ManufacturerName = report.Product.Manufacturer?.CompanyName ?? "Unknown"
+                } : null,
+                
+                Description = report.Description,
+                Status = report.Status,
+                CreatedAt = report.CreatedAt,
+                UpdatedAt = report.UpdatedAt,
+                ResolvedAt = report.ResolvedAt,
+                ResellerTicketId = report.ResellerTicketId,
+                ResolvedBy = report.ResolvedBy,
+                ResolutionNotes = report.ResolutionNotes
+            };
+        }
     }
 }

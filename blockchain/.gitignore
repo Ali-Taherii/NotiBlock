@@ -1,15 +1,3 @@
-.vs/
-obj/
-bin/
-logs/
-Migrations/
-Backup/
-
-.env
-.env.local
-
-*.user
-
 # Logs
 logs
 *.log
@@ -30,6 +18,10 @@ dist-ssr
 cache
 artifacts
 typechain-types
+
+# Exports (generated files)
+exports/*.json
+!exports/.gitkeep
 
 # Editor directories and files
 .vscode/*

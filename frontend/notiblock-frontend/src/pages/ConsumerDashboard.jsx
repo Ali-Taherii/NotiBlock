@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FiPackage, FiFileText, FiAlertTriangle } from 'react-icons/fi';
 import LogoutButton from '../components/shared/LogoutButton';
+import NotificationDropdown from '../components/shared/NotificationDropdown';
 import MyProductsSection from '../components/dashboard/Consumer/MyProductsSection';
 import MyReportsSection from '../components/dashboard/Consumer/MyReportsSection';
 import ActiveRecallsSection from '../components/dashboard/Consumer/ActiveRecallsSection';
@@ -19,7 +20,10 @@ export default function ConsumerDashboard() {
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">Consumer Dashboard</h1>
-          <LogoutButton />
+          <div className="flex items-center gap-3">
+            <NotificationDropdown />
+            <LogoutButton />
+          </div>
         </div>
 
         {/* Tab Navigation */}

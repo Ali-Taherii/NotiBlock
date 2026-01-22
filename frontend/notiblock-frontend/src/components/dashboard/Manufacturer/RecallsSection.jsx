@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getMyRecalls, updateRecall, deleteRecall } from '../../../api/recalls';
+import { getMyRecalls, updateRecall, deleteRecall, updateBlockchainStatus } from '../../../api/recalls';
 import { FiAlertTriangle, FiEdit2, FiTrash2, FiCheckCircle, FiXCircle } from 'react-icons/fi';
 import { useToast } from '../../../hooks/useToast';
 import Toast from '../../shared/Toast';
@@ -23,12 +23,16 @@ export default function RecallsSection() {
     try {
       setLoading(true);
       const response = await getMyRecalls();
-      // Handle paginated response format: { success, data: { items, totalCount, ... } }
-      const items = response?.data?.items || response?.items || response || [];
-      setRecalls(Array.isArray(items) ? items : []);
+      console.log('Recalls response:', response); // Debug log
+      
+      // The interceptor already unwraps to response.data
+      // Backend returns: { success: true, data: [...recalls], message: "..." }
+      const recallsData = response?.data || response || [];
+      setRecalls(Array.isArray(recallsData) ? recallsData : []);
     } catch (err) {
       console.error('Error fetching recalls:', err);
       error('Failed to load recalls');
+      setRecalls([]);
     } finally {
       setLoading(false);
     }
@@ -47,13 +51,23 @@ export default function RecallsSection() {
     e.preventDefault();
     
     try {
-      await updateRecall(editingRecall.id, editForm);
+      // Convert status string to number (0, 1, 2)
+      const statusValue = typeof editForm.status === 'string' ? 
+        parseInt(editForm.status) : editForm.status;
+      
+      const updatePayload = {
+        reason: editForm.reason,
+        actionRequired: editForm.actionRequired,
+        status: statusValue  // This should be a number (RecallStatus enum)
+      };
+      
+      await updateRecall(editingRecall.id, updatePayload);
       success('Recall updated successfully!');
       setEditingRecall(null);
       fetchRecalls();
     } catch (err) {
       console.error('Error updating recall:', err);
-      error('Failed to update recall');
+      error(err.response?.data?.message || 'Failed to update recall');
     }
   };
 
@@ -70,20 +84,45 @@ export default function RecallsSection() {
     }
   };
 
+  const handleUpdateBlockchainStatus = async (recall) => {
+    if (!window.confirm(`Update recall status to "${getStatusLabel(recall.status)}" on blockchain?`)) return;
+
+    try {
+      const statusLabel = getStatusLabel(recall.status);
+      await updateBlockchainStatus(recall.id, statusLabel);
+      success('Recall status updated on blockchain!');
+      fetchRecalls();
+    } catch (err) {
+      console.error('Error updating blockchain status:', err);
+      error(err.response?.data?.message || 'Failed to update blockchain status');
+    }
+  };
+
+  const getStatusLabel = (status) => {
+    const statusLabels = {
+      0: 'Active',
+      1: 'Resolved',
+      2: 'Cancelled',
+    };
+    return statusLabels[status] || 'Active';
+  };
+
   const getStatusBadge = (status) => {
     const statusConfig = {
-      Active: { color: 'bg-orange-100 text-orange-800', icon: FiAlertTriangle },
-      Resolved: { color: 'bg-green-100 text-green-800', icon: FiCheckCircle },
-      Cancelled: { color: 'bg-gray-100 text-gray-800', icon: FiXCircle },
+      0: { color: 'bg-orange-100 text-orange-800', icon: FiAlertTriangle, label: 'Active' },
+      1: { color: 'bg-green-100 text-green-800', icon: FiCheckCircle, label: 'Resolved' },
+      2: { color: 'bg-gray-100 text-gray-800', icon: FiXCircle, label: 'Cancelled' },
     };
 
-    const config = statusConfig[status] || statusConfig.Active;
+    // Handle both numeric and string status
+    const statusKey = typeof status === 'number' ? status : status;
+    const config = statusConfig[statusKey] || statusConfig[0];
     const Icon = config.icon;
 
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${config.color}`}>
         <Icon className="text-sm" />
-        {status}
+        {config.label}
       </span>
     );
   };
@@ -98,73 +137,61 @@ export default function RecallsSection() {
         <Toast show={toast.show} message={toast.message} type={toast.type} onClose={hideToast} />
         
         <div className="bg-white p-6 rounded-lg shadow border">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">Edit Recall</h2>
-            <button
-              onClick={() => setEditingRecall(null)}
-              className="text-gray-500 hover:text-gray-700 text-xl"
-            >
-              ✕
-            </button>
-          </div>
-
+          <h3 className="text-xl font-semibold mb-4">Edit Recall</h3>
+          
           <form onSubmit={handleUpdate} className="space-y-4">
             <div>
-              <label className="block mb-1 font-medium">Product Serial</label>
-              <input
-                type="text"
-                value={editingRecall.productSerialNumber}
-                disabled
-                className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-50"
-              />
-            </div>
-
-            <div>
-              <label className="block mb-1 font-medium">Recall Reason</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Reason
+              </label>
               <textarea
                 value={editForm.reason}
                 onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 rows="3"
                 required
               />
             </div>
 
             <div>
-              <label className="block mb-1 font-medium">Action Required</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Action Required
+              </label>
               <textarea
                 value={editForm.actionRequired}
                 onChange={(e) => setEditForm({ ...editForm, actionRequired: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 rows="3"
                 required
               />
             </div>
 
             <div>
-              <label className="block mb-1 font-medium">Status</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Status
+              </label>
               <select
                 value={editForm.status}
                 onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <option value="Active">Active</option>
-                <option value="Resolved">Resolved</option>
-                <option value="Cancelled">Cancelled</option>
+                <option value="0">Active</option>
+                <option value="1">Resolved</option>
+                <option value="2">Cancelled</option>
               </select>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
-                Update Recall
+                Save Changes
               </button>
               <button
                 type="button"
                 onClick={() => setEditingRecall(null)}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
               >
                 Cancel
               </button>
@@ -198,27 +225,22 @@ export default function RecallsSection() {
       ) : (
         <div className="space-y-4">
           {recalls.map((recall) => (
-            <div key={recall.id} className="bg-white p-5 rounded-lg shadow border">
+            <div
+              key={recall.id}
+              className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+            >
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="font-semibold text-lg">Product: {recall.productId}</h3>
                     {getStatusBadge(recall.status)}
-                    <span className="text-xs text-gray-500">
-                      ID: {recall.id}
-                    </span>
                   </div>
                   
-                  <div className="mb-2">
-                    <span className="font-semibold text-lg">{recall.productSerialNumber}</span>
-                  </div>
-
-                  <div className="mb-2">
-                    <p className="text-sm font-medium text-gray-600">Reason:</p>
+                  <div className="space-y-2 text-sm">
+                    <p className="text-gray-600"><strong>Reason:</strong></p>
                     <p className="text-gray-800">{recall.reason}</p>
-                  </div>
-
-                  <div className="mb-2">
-                    <p className="text-sm font-medium text-gray-600">Action Required:</p>
+                    
+                    <p className="text-gray-600 mt-2"><strong>Action Required:</strong></p>
                     <p className="text-gray-800">{recall.actionRequired}</p>
                   </div>
 
@@ -230,10 +252,21 @@ export default function RecallsSection() {
                   </div>
 
                   {recall.transactionHash && (
-                    <div className="mt-2">
-                      <span className="text-xs text-gray-500">
-                        Blockchain: {recall.transactionHash.substring(0, 20)}...
-                      </span>
+                    <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+                      <div>
+                        <span className="text-xs text-gray-500">
+                          <span className="font-medium">Blockchain:</span> {recall.transactionHash.substring(0, 20)}...
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpdateBlockchainStatus(recall);
+                        }}
+                        className="text-xs px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded"
+                      >
+                        Update on Chain
+                      </button>
                     </div>
                   )}
                 </div>

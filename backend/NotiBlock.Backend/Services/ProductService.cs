@@ -43,6 +43,19 @@ namespace NotiBlock.Backend.Services
             _logger.LogInformation("Product created: {SerialNumber} by manufacturer {ManufacturerId}", 
                 product.SerialNumber, manufacturerId);
 
+            // ===== NOTIFICATION =====
+            await _notificationService.CreateNotificationAsync(new NotificationCreateDTO
+            {
+                RecipientId = manufacturerId,
+                RecipientType = "manufacturer",
+                Type = NotificationType.Info,
+                Title = "Product Created Successfully",
+                Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been created and added to your inventory.",
+                RelatedEntityId = product.Id,
+                RelatedEntityType = "product",
+                Priority = NotificationPriority.Normal
+            });
+
             return product;
         }
 
@@ -77,8 +90,53 @@ namespace NotiBlock.Backend.Services
 
                 await _context.SaveChangesAsync();
                 
-                // Notify consumer 
-                await _notificationService.NotifyProductRegisteredAsync(product.Id, registererId);
+                // ===== NOTIFICATIONS =====
+                var notifications = new List<NotificationCreateDTO>
+                {
+                    // Notify consumer
+                    new NotificationCreateDTO
+                    {
+                        RecipientId = registererId,
+                        RecipientType = "consumer",
+                        Type = NotificationType.ProductRegistered,
+                        Title = "Product Registered Successfully",
+                        Message = $"Your product {product.SerialNumber} (Model: {product.Model}) has been successfully registered. You will receive notifications about any recalls affecting this product.",
+                        RelatedEntityId = product.Id,
+                        RelatedEntityType = "product",
+                        Priority = NotificationPriority.Normal
+                    }
+                };
+
+                // Notify manufacturer
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = product.ManufacturerId,
+                    RecipientType = "manufacturer",
+                    Type = NotificationType.Info,
+                    Title = "Product Registered to Consumer",
+                    Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been registered to a consumer.",
+                    RelatedEntityId = product.Id,
+                    RelatedEntityType = "product",
+                    Priority = NotificationPriority.Low
+                });
+
+                // Notify reseller if assigned
+                if (product.ResellerId.HasValue)
+                {
+                    notifications.Add(new NotificationCreateDTO
+                    {
+                        RecipientId = product.ResellerId.Value,
+                        RecipientType = "reseller",
+                        Type = NotificationType.Info,
+                        Title = "Product Sold to Consumer",
+                        Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been registered to a consumer.",
+                        RelatedEntityId = product.Id,
+                        RelatedEntityType = "product",
+                        Priority = NotificationPriority.Normal
+                    });
+                }
+
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
             }
             else if (role == RoleReseller)
             {
@@ -104,6 +162,37 @@ namespace NotiBlock.Backend.Services
                     dto.SerialNumber, registererId);
 
                 await _context.SaveChangesAsync();
+
+                // ===== NOTIFICATIONS =====
+                var notifications = new List<NotificationCreateDTO>
+                {
+                    // Notify reseller
+                    new NotificationCreateDTO
+                    {
+                        RecipientId = registererId,
+                        RecipientType = "reseller",
+                        Type = NotificationType.ProductRegistered,
+                        Title = "Product Assigned to Your Inventory",
+                        Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been assigned to you for distribution.",
+                        RelatedEntityId = product.Id,
+                        RelatedEntityType = "product",
+                        Priority = NotificationPriority.Normal
+                    },
+                    // Notify manufacturer
+                    new NotificationCreateDTO
+                    {
+                        RecipientId = product.ManufacturerId,
+                        RecipientType = "manufacturer",
+                        Type = NotificationType.Info,
+                        Title = "Product Assigned to Reseller",
+                        Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been assigned to a reseller for distribution.",
+                        RelatedEntityId = product.Id,
+                        RelatedEntityType = "product",
+                        Priority = NotificationPriority.Low
+                    }
+                };
+
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
             }
             else
             {
@@ -127,15 +216,15 @@ namespace NotiBlock.Backend.Services
             switch (dto.Type)
             {
                 case UnregisterType.RemoveReseller:
-                    HandleRemoveReseller(product, userId, role);
+                    await HandleRemoveResellerAsync(product, userId, role);
                     break;
 
                 case UnregisterType.RemoveConsumer:
-                    HandleRemoveConsumer(product, userId, role);
+                    await HandleRemoveConsumerAsync(product, userId, role);
                     break;
 
                 case UnregisterType.SelfUnregister:
-                    HandleSelfUnregister(product, userId, role);
+                    await HandleSelfUnregisterAsync(product, userId, role);
                     break;
 
                 default:
@@ -146,7 +235,7 @@ namespace NotiBlock.Backend.Services
             return product;
         }
 
-        private void HandleRemoveReseller(Product product, Guid userId, string role)
+        private async Task HandleRemoveResellerAsync(Product product, Guid userId, string role)
         {
             // Only manufacturers can remove reseller assignments
             if (role != RoleManufacturer)
@@ -180,15 +269,28 @@ namespace NotiBlock.Backend.Services
                 throw new InvalidOperationException("Cannot remove reseller from product that has been sold to a consumer");
             }
 
-            var removedResellerId = product.ResellerId;
+            var removedResellerId = product.ResellerId.Value;
             product.ResellerId = null;
             product.RegisteredAt = DateTime.UtcNow;
 
             _logger.LogInformation("Product {SerialNumber} unregistered from reseller {ResellerId} by manufacturer {ManufacturerId}",
                 product.SerialNumber, removedResellerId, userId);
+
+            // ===== NOTIFICATION =====
+            await _notificationService.CreateNotificationAsync(new NotificationCreateDTO
+            {
+                RecipientId = removedResellerId,
+                RecipientType = "reseller",
+                Type = NotificationType.Warning,
+                Title = "Product Removed from Inventory",
+                Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been removed from your inventory by the manufacturer.",
+                RelatedEntityId = product.Id,
+                RelatedEntityType = "product",
+                Priority = NotificationPriority.High
+            });
         }
 
-        private void HandleRemoveConsumer(Product product, Guid userId, string role)
+        private async Task HandleRemoveConsumerAsync(Product product, Guid userId, string role)
         {
             // Manufacturers and resellers can remove consumer assignments
             if (role == RoleManufacturer)
@@ -226,15 +328,28 @@ namespace NotiBlock.Backend.Services
                 throw new InvalidOperationException("Product does not have a consumer assigned");
             }
 
-            var removedOwnerId = product.OwnerId;
+            var removedOwnerId = product.OwnerId.Value;
             product.OwnerId = null;
             product.RegisteredAt = DateTime.UtcNow;
 
             _logger.LogInformation("Product {SerialNumber} unregistered from consumer {ConsumerId} by {Role} {UserId}",
                 product.SerialNumber, removedOwnerId, role, userId);
+
+            // ===== NOTIFICATION =====
+            await _notificationService.CreateNotificationAsync(new NotificationCreateDTO
+            {
+                RecipientId = removedOwnerId,
+                RecipientType = "consumer",
+                Type = NotificationType.Warning,
+                Title = "Product Unregistered",
+                Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been unregistered from your account. You will no longer receive notifications for this product.",
+                RelatedEntityId = product.Id,
+                RelatedEntityType = "product",
+                Priority = NotificationPriority.High
+            });
         }
 
-        private void HandleSelfUnregister(Product product, Guid userId, string role)
+        private async Task HandleSelfUnregisterAsync(Product product, Guid userId, string role)
         {
             // Only consumers can self-unregister
             if (role != RoleConsumer)
@@ -265,6 +380,54 @@ namespace NotiBlock.Backend.Services
 
             _logger.LogInformation("Consumer {ConsumerId} self-unregistered from product {SerialNumber}",
                 userId, product.SerialNumber);
+
+            // ===== NOTIFICATIONS =====
+            var notifications = new List<NotificationCreateDTO>
+            {
+                // Notify consumer (confirmation)
+                new NotificationCreateDTO
+                {
+                    RecipientId = userId,
+                    RecipientType = "consumer",
+                    Type = NotificationType.Info,
+                    Title = "Product Unregistered",
+                    Message = $"You have successfully unregistered product {product.SerialNumber} (Model: {product.Model}). You will no longer receive notifications for this product.",
+                    RelatedEntityId = product.Id,
+                    RelatedEntityType = "product",
+                    Priority = NotificationPriority.Normal
+                }
+            };
+
+            // Notify reseller if assigned
+            if (product.ResellerId.HasValue)
+            {
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = product.ResellerId.Value,
+                    RecipientType = "reseller",
+                    Type = NotificationType.Info,
+                    Title = "Consumer Unregistered Product",
+                    Message = $"A consumer has unregistered product {product.SerialNumber} (Model: {product.Model}).",
+                    RelatedEntityId = product.Id,
+                    RelatedEntityType = "product",
+                    Priority = NotificationPriority.Low
+                });
+            }
+
+            // Notify manufacturer
+            notifications.Add(new NotificationCreateDTO
+            {
+                RecipientId = product.ManufacturerId,
+                RecipientType = "manufacturer",
+                Type = NotificationType.Info,
+                Title = "Consumer Unregistered Product",
+                Message = $"A consumer has unregistered product {product.SerialNumber} (Model: {product.Model}).",
+                RelatedEntityId = product.Id,
+                RelatedEntityType = "product",
+                Priority = NotificationPriority.Low
+            });
+
+            await _notificationService.CreateBulkNotificationsAsync(notifications);
         }
 
         public async Task<ProductResponseDTO> GetProductBySerialNumberAsync(string serialNumber)
@@ -314,6 +477,8 @@ namespace NotiBlock.Backend.Services
             // Update allowed fields
             product.Model = dto.Model.Trim();
 
+            var notifications = new List<NotificationCreateDTO>();
+
             // Manufacturers can assign to resellers
             if (role == RoleManufacturer && dto.ResellerId.HasValue)
             {
@@ -329,6 +494,19 @@ namespace NotiBlock.Backend.Services
                 product.ResellerId = dto.ResellerId;
                 _logger.LogInformation("Product {SerialNumber} assigned to reseller {ResellerId}", 
                     serialNumber, dto.ResellerId);
+
+                // Notify reseller
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = dto.ResellerId.Value,
+                    RecipientType = "reseller",
+                    Type = NotificationType.ProductRegistered,
+                    Title = "Product Assigned to Your Inventory",
+                    Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been assigned to you for distribution.",
+                    RelatedEntityId = product.Id,
+                    RelatedEntityType = "product",
+                    Priority = NotificationPriority.Normal
+                });
             }
 
             // Resellers can assign to consumers
@@ -352,12 +530,44 @@ namespace NotiBlock.Backend.Services
                 product.OwnerId = dto.OwnerId;
                 _logger.LogInformation("Product {SerialNumber} assigned to consumer {OwnerId}", 
                     serialNumber, dto.OwnerId);
+
+                // Notify consumer
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = dto.OwnerId.Value,
+                    RecipientType = "consumer",
+                    Type = NotificationType.ProductRegistered,
+                    Title = "Product Registered Successfully",
+                    Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been registered to your account. You will receive notifications about any recalls affecting this product.",
+                    RelatedEntityId = product.Id,
+                    RelatedEntityType = "product",
+                    Priority = NotificationPriority.Normal
+                });
+
+                // Notify manufacturer
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = product.ManufacturerId,
+                    RecipientType = "manufacturer",
+                    Type = NotificationType.Info,
+                    Title = "Product Sold to Consumer",
+                    Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been sold to a consumer.",
+                    RelatedEntityId = product.Id,
+                    RelatedEntityType = "product",
+                    Priority = NotificationPriority.Low
+                });
             }
 
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Product {SerialNumber} updated by {Role} {UserId}", 
                 serialNumber, role, userId);
+
+            // Send notifications if any
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+            }
 
             return product;
         }
@@ -415,6 +625,19 @@ namespace NotiBlock.Backend.Services
 
             _logger.LogInformation("Product {SerialNumber} soft deleted by manufacturer {UserId} at {DeletedAt}", 
                 serialNumber, userId, product.DeletedAt);
+
+            // ===== NOTIFICATION =====
+            await _notificationService.CreateNotificationAsync(new NotificationCreateDTO
+            {
+                RecipientId = userId,
+                RecipientType = "manufacturer",
+                Type = NotificationType.Info,
+                Title = "Product Deleted",
+                Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been successfully deleted from your inventory.",
+                RelatedEntityId = product.Id,
+                RelatedEntityType = "product",
+                Priority = NotificationPriority.Normal
+            });
 
             return true;
         }

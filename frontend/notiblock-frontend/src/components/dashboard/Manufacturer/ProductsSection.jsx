@@ -156,7 +156,7 @@ export default function ProductsSection() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {product.ownerId ? (
-                              <span className="text-blue-600">{product.owner.Name}</span>
+                              <span className="text-blue-600">{product.owner.name}</span>
                     ) : (
                       <span className="text-gray-400">Not owned</span>
                     )}

@@ -7,10 +7,14 @@ using Microsoft.Extensions.Logging;
 
 namespace NotiBlock.Backend.Services
 {
-    public class ResellerTicketService(AppDbContext context, ILogger<ResellerTicketService> logger) : IResellerTicketService
+    public class ResellerTicketService(
+        AppDbContext context, 
+        ILogger<ResellerTicketService> logger,
+        INotificationService notificationService) : IResellerTicketService
     {
         private readonly AppDbContext _context = context;
         private readonly ILogger<ResellerTicketService> _logger = logger;
+        private readonly INotificationService _notificationService = notificationService;
 
         public async Task<ResellerTicket> CreateTicketAsync(ResellerTicketCreateDTO dto, Guid resellerId)
         {
@@ -43,6 +47,9 @@ namespace NotiBlock.Backend.Services
 
             _logger.LogInformation("Ticket {TicketId} created by reseller {ResellerId} with category {Category}",
                 ticket.Id, resellerId, dto.Category);
+
+            // ===== NOTIFICATIONS =====
+            await SendTicketCreatedNotificationsAsync(ticket.Id, resellerId, dto.Category, dto.Priority);
 
             return ticket;
         }
@@ -86,6 +93,9 @@ namespace NotiBlock.Backend.Services
                 throw new InvalidOperationException($"Cannot update ticket with status '{ticket.Status}'");
             }
 
+            var oldPriority = ticket.Priority;
+            var priorityChanged = dto.Priority != oldPriority;
+
             // Update allowed fields
             ticket.Category = dto.Category;
             ticket.Description = dto.Description;
@@ -97,6 +107,12 @@ namespace NotiBlock.Backend.Services
             _logger.LogInformation("Ticket {TicketId} updated by reseller {ResellerId}",
                 id, resellerId);
 
+            // ===== NOTIFICATION (if priority increased) =====
+            if (priorityChanged && dto.Priority > oldPriority)
+            {
+                await SendTicketPriorityIncreasedNotificationAsync(id, resellerId, oldPriority, dto.Priority);
+            }
+
             return ticket;
         }
 
@@ -104,6 +120,7 @@ namespace NotiBlock.Backend.Services
         {
             var ticket = await _context.ResellerTickets
                 .IgnoreQueryFilters()
+                .Include(t => t.ConsumerReports)
                 .FirstOrDefaultAsync(t => t.Id == id);
 
             if (ticket == null)
@@ -142,10 +159,19 @@ namespace NotiBlock.Backend.Services
             ticket.DeletedAt = DateTime.UtcNow;
             ticket.DeletedBy = resellerId;
 
+            // Unlink any associated consumer reports
+            var linkedReportIds = ticket.ConsumerReports?.Select(r => r.Id).ToList() ?? new List<Guid>();
+
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Ticket {TicketId} soft deleted by reseller {ResellerId} at {DeletedAt}",
                 id, resellerId, ticket.DeletedAt);
+
+            // ===== NOTIFICATIONS (notify consumers if reports were linked) =====
+            if (linkedReportIds.Count > 0)
+            {
+                await SendTicketDeletedNotificationsAsync(id, linkedReportIds);
+            }
 
             return true;
         }
@@ -361,13 +387,14 @@ namespace NotiBlock.Backend.Services
             // Validate and link each report
             var linkedCount = 0;
             var errors = new List<string>();
+            var linkedConsumerIds = new List<Guid>();
 
             foreach (var report in reports)
             {
-                // Check if report is in valid status (Pending)
-                if (report.Status != ReportStatus.Pending)
+                // Check if report is in valid status (Pending or UnderReview)
+                if (report.Status != ReportStatus.Pending && report.Status != ReportStatus.UnderReview)
                 {
-                    errors.Add($"Report {report.Id} has status '{report.Status}' (must be Pending)");
+                    errors.Add($"Report {report.Id} has status '{report.Status}' (must be Pending or UnderReview)");
                     continue;
                 }
 
@@ -398,6 +425,7 @@ namespace NotiBlock.Backend.Services
                     report.Status = ReportStatus.EscalatedToReseller;
                     report.UpdatedAt = DateTime.UtcNow;
                     linkedCount++;
+                    linkedConsumerIds.Add(report.ConsumerId);
                 }
             }
 
@@ -423,7 +451,141 @@ namespace NotiBlock.Backend.Services
             _logger.LogInformation("Linked {Count} reports to ticket {TicketId} by reseller {ResellerId}",
                 linkedCount, ticketId, resellerId);
 
+            // ===== NOTIFICATIONS =====
+            await SendReportsLinkedNotificationsAsync(ticketId, linkedConsumerIds.Distinct().ToList());
+
             return ticket;
+        }
+
+        // ===== NOTIFICATION HELPER METHODS =====
+
+        private async Task SendTicketCreatedNotificationsAsync(Guid ticketId, Guid resellerId, TicketCategory category, int priority)
+        {
+            var notifications = new List<NotificationCreateDTO>();
+
+            // 1. Notify reseller (confirmation)
+            notifications.Add(new NotificationCreateDTO
+            {
+                RecipientId = resellerId,
+                RecipientType = "reseller",
+                Type = NotificationType.TicketCreated,
+                Title = "Ticket Created Successfully",
+                Message = $"Your {(priority == 3 ? "Critical" : priority == 2 ? "High" : "Normal")} priority ticket (Category: {category}) has been created and is pending review by regulators.",
+                RelatedEntityId = ticketId,
+                RelatedEntityType = "ticket",
+                Priority = NotificationPriority.Normal
+            });
+
+            // 2. Notify all regulators
+            var regulators = await _context.Regulators
+                .Where(r => !r.IsDeleted)
+                .Select(r => r.Id)
+                .ToListAsync();
+
+            var regulatorPriority = priority switch
+            {
+                3 => NotificationPriority.Critical,
+                2 => NotificationPriority.High,
+                _ => NotificationPriority.Normal
+            };
+
+            foreach (var regulatorId in regulators)
+            {
+                notifications.Add(new NotificationCreateDTO
+                {
+                    RecipientId = regulatorId,
+                    RecipientType = "regulator",
+                    Type = NotificationType.TicketCreated,
+                    Title = priority == 3 ? "CRITICAL: New Ticket Requires Review" : "New Ticket Created",
+                    Message = $"A reseller has created a {(priority == 3 ? "Critical" : priority == 2 ? "High" : "Normal")} priority ticket (Category: {category}) that requires regulatory review.",
+                    RelatedEntityId = ticketId,
+                    RelatedEntityType = "ticket",
+                    Priority = regulatorPriority
+                });
+            }
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Sent {Count} notifications for ticket {TicketId} creation",
+                    notifications.Count, ticketId);
+            }
+        }
+
+        private async Task SendTicketPriorityIncreasedNotificationAsync(Guid ticketId, Guid resellerId, int oldPriority, int newPriority)
+        {
+            var regulators = await _context.Regulators
+                .Where(r => !r.IsDeleted)
+                .Select(r => r.Id)
+                .ToListAsync();
+
+            var notifications = regulators.Select(regulatorId => new NotificationCreateDTO
+            {
+                RecipientId = regulatorId,
+                RecipientType = "regulator",
+                Type = NotificationType.Warning,
+                Title = newPriority == 3 ? "CRITICAL: Ticket Priority Escalated" : "Ticket Priority Increased",
+                Message = $"A ticket's priority has been increased from {(oldPriority == 2 ? "High" : "Normal")} to {(newPriority == 3 ? "Critical" : "High")}. This ticket requires immediate attention.",
+                RelatedEntityId = ticketId,
+                RelatedEntityType = "ticket",
+                Priority = newPriority == 3 ? NotificationPriority.Critical : NotificationPriority.High
+            }).ToList();
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Sent {Count} priority increase notifications for ticket {TicketId}",
+                    notifications.Count, ticketId);
+            }
+        }
+
+        private async Task SendTicketDeletedNotificationsAsync(Guid ticketId, List<Guid> linkedReportIds)
+        {
+            var consumerReports = await _context.ConsumerReports
+                .Where(r => linkedReportIds.Contains(r.Id))
+                .Select(r => new { r.ConsumerId, r.SerialNumber })
+                .Distinct()
+                .ToListAsync();
+
+            var notifications = consumerReports.Select(report => new NotificationCreateDTO
+            {
+                RecipientId = report.ConsumerId,
+                RecipientType = "consumer",
+                Type = NotificationType.Info,
+                Title = "Ticket Status Update",
+                Message = $"The ticket associated with your product report ({report.SerialNumber}) has been withdrawn by the reseller. Your report status has been updated accordingly.",
+                RelatedEntityId = ticketId,
+                RelatedEntityType = "ticket",
+                Priority = NotificationPriority.Normal
+            }).ToList();
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Sent {Count} ticket deletion notifications", notifications.Count);
+            }
+        }
+
+        private async Task SendReportsLinkedNotificationsAsync(Guid ticketId, List<Guid> consumerIds)
+        {
+            var notifications = consumerIds.Select(consumerId => new NotificationCreateDTO
+            {
+                RecipientId = consumerId,
+                RecipientType = "consumer",
+                Type = NotificationType.Info,
+                Title = "Your Report Has Been Escalated",
+                Message = $"Your product report has been escalated to a reseller ticket for regulatory review. You will be notified of any updates.",
+                RelatedEntityId = ticketId,
+                RelatedEntityType = "ticket",
+                Priority = NotificationPriority.High
+            }).ToList();
+
+            if (notifications.Count > 0)
+            {
+                await _notificationService.CreateBulkNotificationsAsync(notifications);
+                _logger.LogInformation("Sent {Count} report linking notifications for ticket {TicketId}",
+                    notifications.Count, ticketId);
+            }
         }
     }
 }

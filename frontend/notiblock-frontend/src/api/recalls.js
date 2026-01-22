@@ -16,10 +16,20 @@ export async function updateRecall(id, data) {
     return await apiClient.put(`/recalls/${id}`, data);
 }
 
+export async function updateBlockchainStatus(id, newStatus) {
+    return await apiClient.post(`/recalls/${id}/update-status-blockchain`, {
+        newStatus: newStatus
+    });
+}
+
 export async function deleteRecall(id) {
     return await apiClient.delete(`/recalls/${id}`);
 }
 
 export async function getMyRecalls() {
     return await apiClient.get("/recalls/manufacturer");
+}
+
+export async function getRecallsByProduct(productId) {
+    return await apiClient.get(`/recalls/product/${productId}`);
 }

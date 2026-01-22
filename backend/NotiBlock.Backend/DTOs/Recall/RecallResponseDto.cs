@@ -1,6 +1,6 @@
 ﻿using NotiBlock.Backend.Models;
 
-namespace NotiBlock.Backend.DTOs.Recall
+namespace NotiBlock.Backend.DTOs
 {
     public class RecallResponseDTO
     {

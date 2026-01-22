@@ -19,7 +19,9 @@ export async function countUnreadNotifications() {
 
 // needs fix in the backend
 export async function markAsRead(_notificationIds) {
-    return await apiClient.post(`/notifications/mark-as-read`);
+    return await apiClient.post(`/notifications/mark-as-read`, {
+        notificationIds: _notificationIds
+    });
 }
 
 export async function markAllAsRead() {

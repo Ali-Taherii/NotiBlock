@@ -18,13 +18,14 @@ namespace NotiBlock.Backend.Data
         public DbSet<Notification> Notifications => Set<Notification>();
         public DbSet<BlockchainRecall> BlockchainRecalls => Set<BlockchainRecall>();
         public DbSet<RecallBlockchainEvent> RecallBlockchainEvents => Set<RecallBlockchainEvent>();
+        public DbSet<RecallUpdateRequest> RecallUpdateRequests => Set<RecallUpdateRequest>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
             // ========== VIEWS ==========
-            
+
             modelBuilder.Entity<ResellerTicketReadableView>(entity =>
             {
                 entity.HasNoKey();
@@ -32,7 +33,7 @@ namespace NotiBlock.Backend.Data
             });
 
             // ========== GLOBAL QUERY FILTERS (SOFT DELETE) ==========
-            
+
             modelBuilder.Entity<Product>()
                 .HasQueryFilter(p => !p.IsDeleted);
 
@@ -86,7 +87,7 @@ namespace NotiBlock.Backend.Data
             });
 
             // ========== CONSUMER REPORT CONFIGURATION ==========
-            
+
             // Configure relationship: ConsumerReport -> Product (by SerialNumber)
             modelBuilder.Entity<ConsumerReport>()
                 .HasOne(r => r.Product)
@@ -109,7 +110,7 @@ namespace NotiBlock.Backend.Data
                 .OnDelete(DeleteBehavior.SetNull);
 
             // ========== RESELLER TICKET CONFIGURATION ==========
-            
+
             // Unique constraint: Resellers cannot have multiple open tickets with the same category
             modelBuilder.Entity<ResellerTicket>()
                 .HasIndex(t => new { t.ResellerId, t.Category })
@@ -137,6 +138,32 @@ namespace NotiBlock.Backend.Data
 
             // Global query filter for soft deletes
             modelBuilder.Entity<Recall>().HasQueryFilter(r => !r.IsDeleted);
+
+            // ========== RECALL UPDATE REQUEST CONFIGURATION ==========
+            modelBuilder.Entity<RecallUpdateRequest>()
+                .HasQueryFilter(rur => !rur.IsDeleted);
+
+            modelBuilder.Entity<RecallUpdateRequest>()
+                .HasOne(rur => rur.Recall)
+                .WithMany(r => r.UpdateRequests)
+                .HasForeignKey(rur => rur.RecallId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<RecallUpdateRequest>()
+                .HasOne(rur => rur.Manufacturer)
+                .WithMany()
+                .HasForeignKey(rur => rur.ManufacturerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<RecallUpdateRequest>()
+                .HasOne(rur => rur.ReviewedByRegulator)
+                .WithMany()
+                .HasForeignKey(rur => rur.ReviewedBy)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<RecallUpdateRequest>()
+                .HasIndex(rur => new { rur.RecallId, rur.Status })
+                .HasFilter("\"IsDeleted\" = false");
 
 
             // ========== REGULATOR REVIEW CONFIGURATION ==========

@@ -361,6 +361,12 @@ namespace NotiBlock.Backend.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ApprovedBy")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -394,6 +400,16 @@ namespace NotiBlock.Backend.Migrations
                         .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("RegulatorNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("RejectedBy")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("ResolvedAt")
                         .HasColumnType("timestamp with time zone");
@@ -475,6 +491,73 @@ namespace NotiBlock.Backend.Migrations
                     b.HasIndex("RecallId");
 
                     b.ToTable("RecallBlockchainEvents");
+                });
+
+            modelBuilder.Entity("NotiBlock.Backend.Models.RecallUpdateRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ManufacturerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ManufacturerNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ProposedActionRequired")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ProposedReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int?>("ProposedStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RecallId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RegulatorNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ManufacturerId");
+
+                    b.HasIndex("ReviewedBy");
+
+                    b.HasIndex("RecallId", "Status")
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("RecallUpdateRequests");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.Regulator", b =>
@@ -822,6 +905,32 @@ namespace NotiBlock.Backend.Migrations
                     b.Navigation("Recall");
                 });
 
+            modelBuilder.Entity("NotiBlock.Backend.Models.RecallUpdateRequest", b =>
+                {
+                    b.HasOne("NotiBlock.Backend.Models.Manufacturer", "Manufacturer")
+                        .WithMany()
+                        .HasForeignKey("ManufacturerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NotiBlock.Backend.Models.Recall", "Recall")
+                        .WithMany("UpdateRequests")
+                        .HasForeignKey("RecallId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("NotiBlock.Backend.Models.Regulator", "ReviewedByRegulator")
+                        .WithMany()
+                        .HasForeignKey("ReviewedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Manufacturer");
+
+                    b.Navigation("Recall");
+
+                    b.Navigation("ReviewedByRegulator");
+                });
+
             modelBuilder.Entity("NotiBlock.Backend.Models.RegulatorReview", b =>
                 {
                     b.HasOne("NotiBlock.Backend.Models.Regulator", "Regulator")
@@ -856,6 +965,11 @@ namespace NotiBlock.Backend.Migrations
                     b.Navigation("ApprovedBy");
 
                     b.Navigation("Reseller");
+                });
+
+            modelBuilder.Entity("NotiBlock.Backend.Models.Recall", b =>
+                {
+                    b.Navigation("UpdateRequests");
                 });
 
             modelBuilder.Entity("NotiBlock.Backend.Models.ResellerTicket", b =>

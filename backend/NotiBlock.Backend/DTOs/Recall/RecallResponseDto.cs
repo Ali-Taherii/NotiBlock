@@ -14,6 +14,12 @@ namespace NotiBlock.Backend.DTOs
         public DateTime IssuedAt { get; set; }
         public DateTime? ResolvedAt { get; set; }
         public string? TransactionHash { get; set; }
+        public Guid? ApprovedBy { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+        public Guid? RejectedBy { get; set; }
+        public DateTime? RejectedAt { get; set; }
+        public string? RegulatorNotes { get; set; }
+        public int PendingUpdateRequestCount { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime LastUpdatedAt { get; set; }
     }

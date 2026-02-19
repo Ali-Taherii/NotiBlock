@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getApprovedManufacturerTickets } from '../../../api/regulatorReviews';
-import { createRecall, issueRecallToBlockchain } from '../../../api/recalls';
-import { QRCodeSVG } from 'qrcode.react';
-import { FiAlertTriangle, FiCheckCircle, FiPackage, FiExternalLink } from 'react-icons/fi';
-
-const SEPOLIA_EXPLORER_URL = 'https://sepolia.etherscan.io/tx/';
+import { createRecall } from '../../../api/recalls';
+import { FiAlertTriangle, FiCheckCircle, FiPackage, FiClock } from 'react-icons/fi';
 
 export default function ApprovedTicketsSection() {
   const [tickets, setTickets] = useState([]);
@@ -16,11 +13,9 @@ export default function ApprovedTicketsSection() {
     reason: '',
     actionRequired: '',
   });
-  const [recallData, setRecallData] = useState(null);
+  const [recallSubmitted, setRecallSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isIssuingToBlockchain, setIsIssuingToBlockchain] = useState(false);
   const [status, setStatus] = useState(null);
-  const [blockchainData, setBlockchainData] = useState(null);
 
   useEffect(() => {
     fetchApprovedTickets();
@@ -75,15 +70,9 @@ export default function ApprovedTicketsSection() {
         actionRequired: recallForm.actionRequired.trim(),
       };
 
-      const result = await createRecall(recallPayload);
-      const recallId = result.id || result.data?.id;
-      
-      setRecallData({
-        recall: result,
-        recallId: recallId,
-      });
-      
-      setStatus('Recall created successfully! Now issue it to the blockchain for permanent verification.');
+      await createRecall(recallPayload);
+      setRecallSubmitted(true);
+      setStatus('Recall submitted for regulator approval. You will be notified once it is activated.');
       fetchApprovedTickets();
     } catch (err) {
       console.error('Error creating recall:', err);
@@ -93,63 +82,18 @@ export default function ApprovedTicketsSection() {
     }
   };
 
-  const handleIssueToBlockchain = async () => {
-    if (!recallData?.recallId) {
-      setStatus('No recall ID found. Please create a recall first.');
-      return;
-    }
-
-    setIsIssuingToBlockchain(true);
-    setStatus('Issuing recall to blockchain...');
-
-    try {
-      const blockchainResult = await issueRecallToBlockchain(recallData.recallId);
-      
-      const txHash = blockchainResult.transactionHash || blockchainResult.data?.transactionHash;
-      const explorerUrl = `${SEPOLIA_EXPLORER_URL}${txHash}`;
-
-      const blockchainInfo = {
-        transactionHash: txHash,
-        blockNumber: blockchainResult.blockNumber || blockchainResult.data?.blockNumber,
-        timestamp: blockchainResult.timestamp || blockchainResult.data?.timestamp,
-        explorerUrl: explorerUrl,
-      };
-
-      setBlockchainData(blockchainInfo);
-
-      // Create QR code with explorer URL
-      const qrPayload = explorerUrl;
-
-      setRecallData({
-        ...recallData,
-        qrData: qrPayload,
-        blockchainInfo: blockchainInfo,
-      });
-
-      setStatus('Recall successfully issued to blockchain! 🎉');
-
-    } catch (err) {
-      console.error('Error issuing to blockchain:', err);
-      setStatus(err.message || 'Error issuing recall to blockchain. Please try again.');
-    } finally {
-      setIsIssuingToBlockchain(false);
-    }
-  };
-
   const handleSelectTicket = (ticket) => {
     setSelectedTicket(ticket);
     setSelectedProduct(null);
     setRecallForm({ reason: '', actionRequired: '' });
-    setRecallData(null);
-    setBlockchainData(null);
+    setRecallSubmitted(false);
     setStatus(null);
   };
 
   const handleCancel = () => {
     setSelectedTicket(null);
     setSelectedProduct(null);
-    setRecallData(null);
-    setBlockchainData(null);
+    setRecallSubmitted(false);
     setStatus(null);
   };
 
@@ -192,12 +136,12 @@ export default function ApprovedTicketsSection() {
                     <button
                       key={idx}
                       onClick={() => setSelectedProduct(product)}
-                      disabled={!!recallData}
+                      disabled={recallSubmitted}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all ${
                         selectedProduct?.serialNumber === product.serialNumber
                           ? 'border-blue-500 bg-blue-50 text-blue-800'
                           : 'border-gray-300 bg-white hover:border-blue-300 hover:bg-blue-50'
-                      } ${recallData ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      } ${recallSubmitted ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <FiPackage className={selectedProduct?.serialNumber === product.serialNumber ? 'text-blue-600' : 'text-gray-600'} />
                       <div className="text-left">
@@ -243,7 +187,7 @@ export default function ApprovedTicketsSection() {
                 placeholder="Describe the reason for the recall..."
                 rows="4"
                 required
-                disabled={!!recallData}
+                disabled={recallSubmitted}
               />
             </div>
 
@@ -256,12 +200,12 @@ export default function ApprovedTicketsSection() {
                 placeholder="What action should consumers take?"
                 rows="4"
                 required
-                disabled={!!recallData}
+                disabled={recallSubmitted}
               />
             </div>
 
             <div className="flex gap-3">
-              {!recallData ? (
+              {!recallSubmitted ? (
                 <>
                   <button 
                     type="submit" 
@@ -269,7 +213,7 @@ export default function ApprovedTicketsSection() {
                     className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <FiAlertTriangle />
-                    {isSubmitting ? 'Creating Recall...' : 'Create Recall'}
+                    {isSubmitting ? 'Submitting...' : 'Submit Recall Proposal'}
                   </button>
                   <button
                     type="button"
@@ -280,29 +224,13 @@ export default function ApprovedTicketsSection() {
                   </button>
                 </>
               ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleIssueToBlockchain}
-                    disabled={isIssuingToBlockchain || !!blockchainData}
-                    className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isIssuingToBlockchain ? (
-                      <>⏳ Issuing to Blockchain...</>
-                    ) : blockchainData ? (
-                      <>✓ Issued to Blockchain</>
-                    ) : (
-                      <>🔗 Issue to Blockchain</>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCancel}
-                    className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-                  >
-                    Done
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800"
+                >
+                  Close
+                </button>
               )}
             </div>
 
@@ -318,76 +246,17 @@ export default function ApprovedTicketsSection() {
               </div>
             )}
           </form>
+
+          {recallSubmitted && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded flex items-start gap-3">
+              <FiClock className="text-blue-600 text-xl" />
+              <div>
+                <p className="font-semibold text-blue-900">Awaiting regulator approval</p>
+                <p className="text-sm text-blue-800">Regulators will review this recall, activate it on-chain, and notify all stakeholders once approved.</p>
+              </div>
+            </div>
+          )}
         </div>
-
-        {recallData && (
-          <div className="mt-6 bg-white p-6 rounded-lg shadow border">
-            <div className="flex items-center gap-2 mb-4">
-              <FiCheckCircle className="text-green-600 text-2xl" />
-              <h3 className="text-lg font-bold text-green-600">Recall Created Successfully!</h3>
-            </div>
-            
-            <div className="mb-6 space-y-2">
-              <p><strong>Recall ID:</strong> {recallData.recallId}</p>
-              <p><strong>Product:</strong> {selectedProduct.model || selectedProduct.name}</p>
-              <p><strong>Product Serial:</strong> {selectedProduct.serialNumber}</p>
-              <p><strong>Status:</strong> <span className="text-orange-600">Active</span></p>
-              <p><strong>Created:</strong> {new Date().toLocaleString()}</p>
-            </div>
-
-            {blockchainData && (
-              <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded">
-                <h4 className="font-semibold mb-2 text-purple-800 flex items-center gap-2">
-                  🔗 Blockchain Verification
-                </h4>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <strong>Transaction Hash:</strong>
-                    <p className="font-mono text-xs break-all mt-1">{blockchainData.transactionHash}</p>
-                  </div>
-                  <p><strong>Block Number:</strong> {blockchainData.blockNumber}</p>
-                  <p><strong>Timestamp:</strong> {new Date(blockchainData.timestamp).toLocaleString()}</p>
-                  <a
-                    href={blockchainData.explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-purple-700 hover:text-purple-900 font-medium mt-2"
-                  >
-                    <FiExternalLink />
-                    View on Sepolia Etherscan
-                  </a>
-                  <p className="text-green-700 font-medium mt-2">✓ Recall is permanently recorded on the blockchain</p>
-                </div>
-              </div>
-            )}
-
-            {blockchainData && recallData.qrData && (
-              <div className="text-center p-6 bg-gray-50 rounded">
-                <h4 className="font-medium mb-3">QR Code - Scan to View on Blockchain Explorer</h4>
-                <div className="inline-block p-4 bg-white border-2 border-gray-300 rounded">
-                  <QRCodeSVG value={recallData.qrData} size={200} />
-                </div>
-                <p className="text-xs mt-3 text-gray-600">
-                  Scan this QR code to view the transaction on Sepolia Etherscan
-                </p>
-                <p className="text-xs mt-1 text-purple-600 font-mono break-all">
-                  {recallData.qrData}
-                </p>
-              </div>
-            )}
-
-            {!blockchainData && (
-              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded text-center">
-                <p className="text-sm text-gray-700 mb-3">
-                  ⚠️ This recall has not been issued to the blockchain yet.
-                </p>
-                <p className="text-xs text-gray-600">
-                  Click "Issue to Blockchain" above to ensure permanent verification and generate the QR code.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     );
   }

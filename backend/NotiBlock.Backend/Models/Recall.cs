@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace NotiBlock.Backend.Models
 {
@@ -25,13 +26,21 @@ namespace NotiBlock.Backend.Models
         [StringLength(2000, MinimumLength = 10)]
         public string ActionRequired { get; set; } = string.Empty;
 
-        public RecallStatus Status { get; set; } = RecallStatus.Active;
+        public RecallStatus Status { get; set; } = RecallStatus.PendingApproval;
 
         public DateTime IssuedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ResolvedAt { get; set; }
 
         [StringLength(66)]
         public string? TransactionHash { get; set; }
+
+        public Guid? ApprovedBy { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+        public Guid? RejectedBy { get; set; }
+        public DateTime? RejectedAt { get; set; }
+
+        [StringLength(2000)]
+        public string? RegulatorNotes { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime LastUpdatedAt { get; set; } = DateTime.UtcNow;
@@ -40,12 +49,16 @@ namespace NotiBlock.Backend.Models
         public bool IsDeleted { get; set; } = false;
         public DateTime? DeletedAt { get; set; }
         public Guid? DeletedBy { get; set; }
+
+        public ICollection<RecallUpdateRequest> UpdateRequests { get; set; } = new List<RecallUpdateRequest>();
     }
 
     public enum RecallStatus
     {
-        Active,
-        Resolved,
-        Cancelled
+        Active = 0,
+        Resolved = 1,
+        Cancelled = 2,
+        PendingApproval = 3,
+        Rejected = 4
     }
 }

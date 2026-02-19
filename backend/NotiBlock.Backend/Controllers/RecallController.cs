@@ -23,7 +23,7 @@ namespace NotiBlock.Backend.Controllers
                 var recall = await _service.CreateRecallAsync(dto, manufacturerId);
                 _logger.LogInformation("Recall created successfully by manufacturer {ManufacturerId}", manufacturerId);
 
-                return CreatedAtAction(nameof(GetRecallById), new { id = recall.Id }, 
+                return CreatedAtAction(nameof(GetRecallById), new { id = recall.Id },
                     ApiResponse<object>.SuccessResponse(recall, "Recall created successfully"));
             }
             catch (KeyNotFoundException ex)
@@ -121,21 +121,170 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
-        // ===== BLOCKCHAIN INTEGRATION ENDPOINTS =====
+        [HttpGet("pending")]
+        [Authorize(Roles = "regulator")]
+        public async Task<IActionResult> GetPendingRecalls()
+        {
+            try
+            {
+                var recalls = await _service.GetPendingRecallsForApprovalAsync();
+                return Ok(ApiResponse<object>.SuccessResponse(recalls));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving pending recalls");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving pending recalls"));
+            }
+        }
 
-        [HttpPost("{id}/issue-blockchain")]
+        [HttpPost("{id}/approve")]
+        [Authorize(Roles = "regulator")]
+        public async Task<IActionResult> ApproveRecall(Guid id, [FromBody] RecallApprovalDTO dto)
+        {
+            try
+            {
+                var regulatorId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var result = await _service.ApproveRecallAsync(id, regulatorId, dto ?? new RecallApprovalDTO());
+                return Ok(ApiResponse<object>.SuccessResponse(result, "Recall approved and activated"));
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or KeyNotFoundException)
+            {
+                _logger.LogWarning(ex, "Failed to approve recall {RecallId}", id);
+                var statusCode = ex switch
+                {
+                    UnauthorizedAccessException => 403,
+                    InvalidOperationException => 400,
+                    KeyNotFoundException => 404,
+                    _ => 500
+                };
+                return StatusCode(statusCode, ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error approving recall {RecallId}", id);
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while approving the recall"));
+            }
+        }
+
+        [HttpPost("{id}/reject")]
+        [Authorize(Roles = "regulator")]
+        public async Task<IActionResult> RejectRecall(Guid id, [FromBody] RecallRejectionDTO dto)
+        {
+            try
+            {
+                var regulatorId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var result = await _service.RejectRecallAsync(id, regulatorId, dto);
+                return Ok(ApiResponse<object>.SuccessResponse(result, "Recall rejected"));
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or KeyNotFoundException)
+            {
+                var statusCode = ex switch
+                {
+                    UnauthorizedAccessException => 403,
+                    InvalidOperationException => 400,
+                    KeyNotFoundException => 404,
+                    _ => 500
+                };
+                _logger.LogWarning(ex, "Failed to reject recall {RecallId}", id);
+                return StatusCode(statusCode, ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error rejecting recall {RecallId}", id);
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while rejecting the recall"));
+            }
+        }
+
+        [HttpPost("{id}/updates")]
         [Authorize(Roles = "manufacturer")]
-        public async Task<IActionResult> IssueRecallToBlockchain(Guid id)
+        public async Task<IActionResult> CreateUpdateRequest(Guid id, [FromBody] RecallUpdateProposalDTO dto)
         {
             try
             {
                 var manufacturerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var blockchainData = await _service.IssueRecallToBlockchainAsync(id, manufacturerId);
-                
-                _logger.LogInformation("Recall {RecallId} issued to blockchain successfully. TxHash: {TxHash}", 
+                var result = await _service.CreateUpdateRequestAsync(id, dto, manufacturerId);
+                return Ok(ApiResponse<object>.SuccessResponse(result, "Update request submitted"));
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or KeyNotFoundException)
+            {
+                var statusCode = ex switch
+                {
+                    UnauthorizedAccessException => 403,
+                    InvalidOperationException => 400,
+                    KeyNotFoundException => 404,
+                    _ => 500
+                };
+                _logger.LogWarning(ex, "Failed to create update request for recall {RecallId}", id);
+                return StatusCode(statusCode, ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating recall update request {RecallId}", id);
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while creating the update request"));
+            }
+        }
+
+        [HttpGet("updates/pending")]
+        [Authorize(Roles = "regulator")]
+        public async Task<IActionResult> GetPendingUpdateRequests()
+        {
+            try
+            {
+                var requests = await _service.GetPendingUpdateRequestsAsync();
+                return Ok(ApiResponse<object>.SuccessResponse(requests));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving pending recall update requests");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving update requests"));
+            }
+        }
+
+        [HttpPost("updates/{requestId}/decision")]
+        [Authorize(Roles = "regulator")]
+        public async Task<IActionResult> DecideUpdateRequest(Guid requestId, [FromBody] RecallUpdateDecisionDTO dto)
+        {
+            try
+            {
+                var regulatorId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var recall = await _service.DecideUpdateRequestAsync(requestId, dto, regulatorId);
+                var message = dto.Approve ? "Update request approved" : "Update request rejected";
+                return Ok(ApiResponse<object>.SuccessResponse(recall, message));
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or KeyNotFoundException)
+            {
+                var statusCode = ex switch
+                {
+                    UnauthorizedAccessException => 403,
+                    InvalidOperationException => 400,
+                    KeyNotFoundException => 404,
+                    _ => 500
+                };
+                _logger.LogWarning(ex, "Failed to decide update request {RequestId}", requestId);
+                return StatusCode(statusCode, ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deciding recall update request {RequestId}", requestId);
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while processing the decision"));
+            }
+        }
+
+        // ===== BLOCKCHAIN INTEGRATION ENDPOINTS =====
+
+        [HttpPost("{id}/issue-blockchain")]
+        [Authorize(Roles = "regulator")]
+        public async Task<IActionResult> IssueRecallToBlockchain(Guid id)
+        {
+            try
+            {
+                var regulatorId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var blockchainData = await _service.IssueRecallToBlockchainAsync(id, regulatorId);
+
+                _logger.LogInformation("Recall {RecallId} issued to blockchain successfully. TxHash: {TxHash}",
                     id, blockchainData.TransactionHash);
-                
-                return Ok(ApiResponse<RecallBlockchainDTO>.SuccessResponse(blockchainData, 
+
+                return Ok(ApiResponse<RecallBlockchainDTO>.SuccessResponse(blockchainData,
                     "Recall issued to blockchain successfully"));
             }
             catch (UnauthorizedAccessException ex)
@@ -161,18 +310,18 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpPost("{id}/update-status-blockchain")]
-        [Authorize(Roles = "manufacturer")]
+        [Authorize(Roles = "regulator")]
         public async Task<IActionResult> UpdateRecallStatusOnBlockchain(Guid id, [FromBody] UpdateRecallStatusDTO dto)
         {
             try
             {
-                var manufacturerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var blockchainData = await _service.UpdateRecallStatusOnBlockchainAsync(id, dto.NewStatus, manufacturerId);
-                
-                _logger.LogInformation("Recall {RecallId} status updated on blockchain. NewStatus: {NewStatus}, TxHash: {TxHash}", 
+                var regulatorId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var blockchainData = await _service.UpdateRecallStatusOnBlockchainAsync(id, dto.NewStatus, regulatorId);
+
+                _logger.LogInformation("Recall {RecallId} status updated on blockchain. NewStatus: {NewStatus}, TxHash: {TxHash}",
                     id, dto.NewStatus, blockchainData.TransactionHash);
-                
-                return Ok(ApiResponse<RecallBlockchainDTO>.SuccessResponse(blockchainData, 
+
+                return Ok(ApiResponse<RecallBlockchainDTO>.SuccessResponse(blockchainData,
                     "Recall status updated on blockchain successfully"));
             }
             catch (UnauthorizedAccessException ex)
@@ -203,7 +352,7 @@ namespace NotiBlock.Backend.Controllers
             try
             {
                 var blockchainData = await _service.GetRecallBlockchainDataAsync(id);
-                
+
                 if (blockchainData == null)
                 {
                     _logger.LogInformation("Recall {RecallId} has not been issued to blockchain yet", id);
@@ -226,10 +375,10 @@ namespace NotiBlock.Backend.Controllers
             try
             {
                 var isVerified = await _service.VerifyRecallOnBlockchainAsync(id);
-                
+
                 var message = isVerified ? "Recall verified on blockchain" : "Recall not verified on blockchain";
                 var response = new { verified = isVerified, message = message };
-                
+
                 _logger.LogInformation("Recall {RecallId} blockchain verification: {IsVerified}", id, isVerified);
                 return Ok(ApiResponse<object>.SuccessResponse(response));
             }
@@ -264,13 +413,13 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "manufacturer")]
+        [Authorize(Roles = "regulator")]
         public async Task<IActionResult> UpdateRecall(Guid id, [FromBody] RecallUpdateDTO dto)
         {
             try
             {
-                var manufacturerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var updated = await _service.UpdateRecallAsync(id, dto, manufacturerId);
+                var regulatorId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var updated = await _service.UpdateRecallAsync(id, dto, regulatorId);
 
                 if (updated == null)
                 {
@@ -294,13 +443,14 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "manufacturer")]
+        [Authorize(Roles = "manufacturer,regulator")]
         public async Task<IActionResult> DeleteRecall(Guid id)
         {
             try
             {
-                var manufacturerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var deleted = await _service.SoftDeleteRecallAsync(id, manufacturerId);
+                var actorId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var isRegulator = User.IsInRole("regulator");
+                var deleted = await _service.SoftDeleteRecallAsync(id, actorId, isRegulator);
 
                 if (!deleted)
                 {
@@ -324,13 +474,13 @@ namespace NotiBlock.Backend.Controllers
         }
 
         [HttpPost("{id}/resolve")]
-        [Authorize(Roles = "manufacturer")]
+        [Authorize(Roles = "regulator")]
         public async Task<IActionResult> ResolveRecall(Guid id)
         {
             try
             {
-                var manufacturerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var resolved = await _service.ResolveRecallAsync(id, manufacturerId);
+                var regulatorId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var resolved = await _service.ResolveRecallAsync(id, regulatorId);
 
                 if (!resolved)
                 {

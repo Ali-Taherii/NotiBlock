@@ -1,18 +1,25 @@
 import { useState, useEffect } from 'react';
-import { getMyRecalls, updateRecall, deleteRecall, updateBlockchainStatus } from '../../../api/recalls';
-import { FiAlertTriangle, FiEdit2, FiTrash2, FiCheckCircle, FiXCircle } from 'react-icons/fi';
+import {
+  FiAlertTriangle,
+  FiCheckCircle,
+  FiXCircle,
+  FiClock,
+  FiRefreshCcw,
+  FiBarChart2,
+  FiClipboard,
+  FiFilter
+} from 'react-icons/fi';
+import { getMyRecalls } from '../../../api/recalls';
+import RecallUpdateRequestModal from './RecallUpdateRequestModal';
 import { useToast } from '../../../hooks/useToast';
 import Toast from '../../shared/Toast';
 
 export default function RecallsSection() {
   const [recalls, setRecalls] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editingRecall, setEditingRecall] = useState(null);
-  const [editForm, setEditForm] = useState({
-    reason: '',
-    actionRequired: '',
-    status: '',
-  });
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [activeRecall, setActiveRecall] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
   const { toast, success, error, hideToast } = useToast();
 
   useEffect(() => {
@@ -38,85 +45,16 @@ export default function RecallsSection() {
     }
   };
 
-  const handleEdit = (recall) => {
-    setEditingRecall(recall);
-    setEditForm({
-      reason: recall.reason,
-      actionRequired: recall.actionRequired,
-      status: recall.status,
-    });
-  };
-
-  const handleUpdate = async (e) => {
-    e.preventDefault();
-    
-    try {
-      // Convert status string to number (0, 1, 2)
-      const statusValue = typeof editForm.status === 'string' ? 
-        parseInt(editForm.status) : editForm.status;
-      
-      const updatePayload = {
-        reason: editForm.reason,
-        actionRequired: editForm.actionRequired,
-        status: statusValue  // This should be a number (RecallStatus enum)
-      };
-      
-      await updateRecall(editingRecall.id, updatePayload);
-      success('Recall updated successfully!');
-      setEditingRecall(null);
-      fetchRecalls();
-    } catch (err) {
-      console.error('Error updating recall:', err);
-      error(err.response?.data?.message || 'Failed to update recall');
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this recall?')) return;
-
-    try {
-      await deleteRecall(id);
-      success('Recall deleted successfully!');
-      fetchRecalls();
-    } catch (err) {
-      console.error('Error deleting recall:', err);
-      error('Failed to delete recall');
-    }
-  };
-
-  const handleUpdateBlockchainStatus = async (recall) => {
-    if (!window.confirm(`Update recall status to "${getStatusLabel(recall.status)}" on blockchain?`)) return;
-
-    try {
-      const statusLabel = getStatusLabel(recall.status);
-      await updateBlockchainStatus(recall.id, statusLabel);
-      success('Recall status updated on blockchain!');
-      fetchRecalls();
-    } catch (err) {
-      console.error('Error updating blockchain status:', err);
-      error(err.response?.data?.message || 'Failed to update blockchain status');
-    }
-  };
-
-  const getStatusLabel = (status) => {
-    const statusLabels = {
-      0: 'Active',
-      1: 'Resolved',
-      2: 'Cancelled',
-    };
-    return statusLabels[status] || 'Active';
-  };
-
   const getStatusBadge = (status) => {
     const statusConfig = {
       0: { color: 'bg-orange-100 text-orange-800', icon: FiAlertTriangle, label: 'Active' },
       1: { color: 'bg-green-100 text-green-800', icon: FiCheckCircle, label: 'Resolved' },
       2: { color: 'bg-gray-100 text-gray-800', icon: FiXCircle, label: 'Cancelled' },
+      3: { color: 'bg-yellow-100 text-yellow-800', icon: FiClock, label: 'Pending Approval' },
+      4: { color: 'bg-red-100 text-red-800', icon: FiXCircle, label: 'Rejected' },
     };
 
-    // Handle both numeric and string status
-    const statusKey = typeof status === 'number' ? status : status;
-    const config = statusConfig[statusKey] || statusConfig[0];
+    const config = statusConfig[status] || statusConfig[0];
     const Icon = config.icon;
 
     return (
@@ -127,104 +65,157 @@ export default function RecallsSection() {
     );
   };
 
+  const canSubmitUpdate = (recall) => {
+    return recall.status !== 3 && recall.status !== 4;
+  };
+
+  const openUpdateModal = (recall) => {
+    setActiveRecall(recall);
+    setShowUpdateModal(true);
+  };
+
+  const closeUpdateModal = () => {
+    setActiveRecall(null);
+    setShowUpdateModal(false);
+  };
+
+  const handleUpdateSubmitted = () => {
+    success('Update request submitted for regulator review.');
+    closeUpdateModal();
+    fetchRecalls();
+  };
+
+  const statusCounts = recalls.reduce((acc, recall) => {
+    const key = recall.status;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  const pendingUpdateTotal = recalls.reduce(
+    (acc, recall) => acc + (recall.pendingUpdateRequestCount || 0),
+    0
+  );
+
+  const summaryCards = [
+    { label: 'Total Recalls', value: recalls.length, icon: FiBarChart2, accent: 'bg-blue-50 text-blue-600' },
+    { label: 'Pending Approval', value: statusCounts[3] || 0, icon: FiClock, accent: 'bg-yellow-50 text-yellow-700' },
+    { label: 'Active', value: statusCounts[0] || 0, icon: FiAlertTriangle, accent: 'bg-orange-50 text-orange-700' },
+    { label: 'Resolved', value: statusCounts[1] || 0, icon: FiCheckCircle, accent: 'bg-green-50 text-green-700' },
+    { label: 'Pending Update Requests', value: pendingUpdateTotal, icon: FiClipboard, accent: 'bg-purple-50 text-purple-700' }
+  ];
+
+  const statusFiltersConfig = [
+    { value: 'all', label: 'All', statuses: null },
+    { value: 'pending', label: 'Pending Approval', statuses: [3] },
+    { value: 'active', label: 'Active', statuses: [0] },
+    { value: 'resolved', label: 'Resolved', statuses: [1] },
+    { value: 'cancelled', label: 'Cancelled', statuses: [2] },
+    { value: 'rejected', label: 'Rejected', statuses: [4] }
+  ];
+
+  const activeFilter = statusFiltersConfig.find((filter) => filter.value === statusFilter);
+
+  const filteredRecalls = !activeFilter?.statuses
+    ? recalls
+    : recalls.filter((recall) => activeFilter.statuses?.includes(recall.status));
+
+  const getFilterCount = (filter) => {
+    if (!filter.statuses) {
+      return recalls.length;
+    }
+
+    return filter.statuses.reduce((sum, status) => sum + (statusCounts[status] || 0), 0);
+  };
+
+  const hasRecalls = recalls.length > 0;
+  const hasFilteredResults = filteredRecalls.length > 0;
+
   if (loading) {
     return <div className="text-center py-8">Loading recalls...</div>;
-  }
-
-  if (editingRecall) {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <Toast show={toast.show} message={toast.message} type={toast.type} onClose={hideToast} />
-        
-        <div className="bg-white p-6 rounded-lg shadow border">
-          <h3 className="text-xl font-semibold mb-4">Edit Recall</h3>
-          
-          <form onSubmit={handleUpdate} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reason
-              </label>
-              <textarea
-                value={editForm.reason}
-                onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                rows="3"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Action Required
-              </label>
-              <textarea
-                value={editForm.actionRequired}
-                onChange={(e) => setEditForm({ ...editForm, actionRequired: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                rows="3"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
-              <select
-                value={editForm.status}
-                onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="0">Active</option>
-                <option value="1">Resolved</option>
-                <option value="2">Cancelled</option>
-              </select>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Save Changes
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingRecall(null)}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
   }
 
   return (
     <div>
       <Toast show={toast.show} message={toast.message} type={toast.type} onClose={hideToast} />
+      {showUpdateModal && activeRecall && (
+        <RecallUpdateRequestModal
+          recall={activeRecall}
+          onClose={closeUpdateModal}
+          onSuccess={handleUpdateSubmitted}
+        />
+      )}
       
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold">My Recalls</h2>
         <button
           onClick={fetchRecalls}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
+          <FiRefreshCcw className="text-sm" />
           Refresh
         </button>
       </div>
 
-      {recalls.length === 0 ? (
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5 mb-6">
+        {summaryCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.label} className="bg-white border border-gray-100 rounded-lg p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">{card.label}</p>
+                  <p className="text-2xl font-semibold text-gray-900 mt-1">{card.value}</p>
+                </div>
+                <span className={`p-3 rounded-full ${card.accent}`}>
+                  <Icon className="text-lg" />
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {hasRecalls && (
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <FiFilter className="text-gray-400" />
+            <span>Filter by status</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {statusFiltersConfig.map((filter) => {
+              const count = getFilterCount(filter);
+              const isActive = statusFilter === filter.value;
+              return (
+                <button
+                  key={filter.value}
+                  onClick={() => setStatusFilter(filter.value)}
+                  className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${
+                    isActive
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
+                  }`}
+                >
+                  {filter.label} ({count})
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {!hasRecalls ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
           <FiAlertTriangle className="mx-auto text-gray-400 text-5xl mb-3" />
           <p className="text-gray-600">No recalls issued yet.</p>
           <p className="text-sm text-gray-500 mt-1">Go to Approved Tickets to issue recalls.</p>
         </div>
+      ) : !hasFilteredResults ? (
+        <div className="text-center py-10 bg-white border border-dashed border-gray-200 rounded-lg text-gray-600">
+          No recalls match "{activeFilter?.label}" right now.
+        </div>
       ) : (
         <div className="space-y-4">
-          {recalls.map((recall) => (
+          {filteredRecalls.map((recall) => (
             <div
               key={recall.id}
               className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
@@ -234,6 +225,11 @@ export default function RecallsSection() {
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="font-semibold text-lg">Product: {recall.productId}</h3>
                     {getStatusBadge(recall.status)}
+                    {recall.pendingUpdateRequestCount > 0 && (
+                      <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">
+                        {recall.pendingUpdateRequestCount} update request(s)
+                      </span>
+                    )}
                   </div>
                   
                   <div className="space-y-2 text-sm">
@@ -251,41 +247,60 @@ export default function RecallsSection() {
                     )}
                   </div>
 
-                  {recall.transactionHash && (
-                    <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-                      <div>
-                        <span className="text-xs text-gray-500">
-                          <span className="font-medium">Blockchain:</span> {recall.transactionHash.substring(0, 20)}...
-                        </span>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleUpdateBlockchainStatus(recall);
-                        }}
-                        className="text-xs px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded"
-                      >
-                        Update on Chain
-                      </button>
+                  <div className="grid gap-3 md:grid-cols-3 text-sm mt-4">
+                    <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                      <p className="text-gray-500 uppercase text-xs tracking-wide">Regulator Decision</p>
+                      <p className="text-gray-900 font-medium mt-1">
+                        {recall.status === 3 && 'Pending review'}
+                        {recall.status === 4 && 'Rejected'}
+                        {recall.status === 0 && 'Active on chain'}
+                        {recall.status === 1 && 'Resolved'}
+                        {recall.status === 2 && 'Cancelled'}
+                      </p>
+                      {recall.regulatorNotes && (
+                        <p className="text-gray-600 text-xs mt-1">{recall.regulatorNotes}</p>
+                      )}
                     </div>
-                  )}
+                    <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                      <p className="text-gray-500 uppercase text-xs tracking-wide">Blockchain</p>
+                      {recall.transactionHash ? (
+                        <p className="text-gray-900 font-mono text-xs break-all mt-1">
+                          {recall.transactionHash}
+                        </p>
+                      ) : (
+                        <p className="text-gray-700 mt-1">Awaiting regulator activation</p>
+                      )}
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded border border-gray-100">
+                      <p className="text-gray-500 uppercase text-xs tracking-wide">Last Updated</p>
+                      <p className="text-gray-900 font-medium mt-1">
+                        {new Date(recall.lastUpdatedAt || recall.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-
-                <div className="flex gap-2 ml-4">
-                  <button
-                    onClick={() => handleEdit(recall)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-                    title="Edit recall"
-                  >
-                    <FiEdit2 />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(recall.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded"
-                    title="Delete recall"
-                  >
-                    <FiTrash2 />
-                  </button>
+                <div className="flex flex-col items-end gap-3 ml-4">
+                  {canSubmitUpdate(recall) ? (
+                    <button
+                      onClick={() => openUpdateModal(recall)}
+                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                      disabled={recall.pendingUpdateRequestCount > 0}
+                    >
+                      {recall.pendingUpdateRequestCount > 0 ? 'Awaiting Regulator Review' : 'Propose Update'}
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-500 text-center">Updates available once recall is approved.</span>
+                  )}
+                  {recall.approvedAt && (
+                    <p className="text-xs text-gray-500">
+                      Approved on {new Date(recall.approvedAt).toLocaleDateString()}
+                    </p>
+                  )}
+                  {recall.rejectedAt && (
+                    <p className="text-xs text-red-500">
+                      Rejected on {new Date(recall.rejectedAt).toLocaleDateString()}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

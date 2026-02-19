@@ -1,15 +1,19 @@
 import { useState } from 'react';
-import { FiFileText, FiClipboard } from 'react-icons/fi';
+import { FiFileText, FiClipboard, FiShield, FiShuffle } from 'react-icons/fi';
 import LogoutButton from '../components/shared/LogoutButton';
 import NotificationDropdown from '../components/shared/NotificationDropdown';
 import TicketsSection from '../components/dashboard/Regulator/TicketsSection';
 import MyReviewsSection from '../components/dashboard/Regulator/MyReviewsSection';
+import RecallApprovalsSection from '../components/dashboard/Regulator/RecallApprovalsSection';
+import RecallUpdateRequestsSection from '../components/dashboard/Regulator/RecallUpdateRequestsSection';
 
 export default function RegulatorDashboard() {
   const [activeTab, setActiveTab] = useState('tickets');
 
   const tabs = [
     { id: 'tickets', label: 'All Tickets', icon: FiFileText },
+    { id: 'recall-approvals', label: 'Recall Approvals', icon: FiShield },
+    { id: 'recall-updates', label: 'Recall Updates', icon: FiShuffle },
     { id: 'reviews', label: 'My Reviews', icon: FiClipboard },
   ];
 
@@ -50,6 +54,8 @@ export default function RegulatorDashboard() {
         {/* Tab Content */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           {activeTab === 'tickets' && <TicketsSection />}
+          {activeTab === 'recall-approvals' && <RecallApprovalsSection />}
+          {activeTab === 'recall-updates' && <RecallUpdateRequestsSection />}
           {activeTab === 'reviews' && <MyReviewsSection />}
         </div>
       </div>

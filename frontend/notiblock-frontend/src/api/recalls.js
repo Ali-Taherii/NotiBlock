@@ -37,3 +37,27 @@ export async function getMyRecalls() {
 export async function getRecallsByProduct(productId) {
     return await apiClient.get(`/recalls/product/${productId}`);
 }
+
+export async function getPendingRecalls() {
+    return await apiClient.get("/recalls/pending");
+}
+
+export async function approveRecall(id, data) {
+    return await apiClient.post(`/recalls/${id}/approve`, data);
+}
+
+export async function rejectRecall(id, data) {
+    return await apiClient.post(`/recalls/${id}/reject`, data);
+}
+
+export async function submitRecallUpdateRequest(id, data) {
+    return await apiClient.post(`/recalls/${id}/updates`, data);
+}
+
+export async function getPendingRecallUpdates() {
+    return await apiClient.get("/recalls/updates/pending");
+}
+
+export async function decideRecallUpdate(requestId, data) {
+    return await apiClient.post(`/recalls/updates/${requestId}/decision`, data);
+}

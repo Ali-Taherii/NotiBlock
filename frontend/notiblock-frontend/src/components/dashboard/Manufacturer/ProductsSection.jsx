@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { createProduct, getMyProducts, deleteProduct } from '../../../api/products';
-import { FiPlus, FiTrash2, FiPackage } from 'react-icons/fi';
+import { createProduct, getMyProducts, deleteProduct, unregisterProduct } from '../../../api/products';
+import { FiPlus, FiTrash2, FiPackage, FiUserMinus } from 'react-icons/fi';
 import { useToast } from '../../../hooks/useToast';
 import Toast from '../../shared/Toast';
 
@@ -56,7 +56,20 @@ export default function ProductsSection() {
       fetchProducts();
     } catch (err) {
       console.error('Error deleting product:', err);
-      error('Failed to delete product');
+      error(err.response?.data?.message || err.message || 'Failed to delete product');
+    }
+  };
+
+  const handleRemoveReseller = async (serialNumber) => {
+    if (!window.confirm('Remove the reseller from this product?')) return;
+
+    try {
+      await unregisterProduct({ serialNumber, type: 0 });
+      success('Reseller removed. You can now reassign or delete this product.');
+      fetchProducts();
+    } catch (err) {
+      console.error('Error removing reseller:', err);
+      error(err.response?.data?.message || err.message || 'Failed to remove reseller');
     }
   };
 
@@ -149,14 +162,14 @@ export default function ProductsSection() {
                   <td className="px-6 py-4 whitespace-nowrap">{product.model}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {product.resellerId ? (
-                      <span className="text-green-600">Assigned</span>
+                      <span className="text-green-700 font-medium">{product.reseller?.companyName || 'Assigned'}</span>
                     ) : (
                       <span className="text-gray-400">Not assigned</span>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {product.ownerId ? (
-                              <span className="text-blue-600">{product.owner.name}</span>
+                      <span className="text-blue-600">{product.owner?.name || 'Registered'}</span>
                     ) : (
                       <span className="text-gray-400">Not owned</span>
                     )}
@@ -165,13 +178,25 @@ export default function ProductsSection() {
                     {new Date(product.registeredAt).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => handleDelete(product.serialNumber)}
-                      className="text-red-600 hover:text-red-800"
-                      title="Delete product"
-                    >
-                      <FiTrash2 />
-                    </button>
+                    <div className="flex items-center gap-3">
+                      {product.resellerId && !product.ownerId && (
+                        <button
+                          onClick={() => handleRemoveReseller(product.serialNumber)}
+                          className="text-yellow-600 hover:text-yellow-800"
+                          title="Remove reseller from this product"
+                        >
+                          <FiUserMinus />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(product.serialNumber)}
+                        className={`text-red-600 hover:text-red-800 ${product.resellerId || product.ownerId ? 'opacity-40 cursor-not-allowed hover:text-red-600' : ''}`}
+                        title={product.resellerId || product.ownerId ? 'Remove reseller and consumer before deleting' : 'Delete product'}
+                        disabled={Boolean(product.resellerId || product.ownerId)}
+                      >
+                        <FiTrash2 />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

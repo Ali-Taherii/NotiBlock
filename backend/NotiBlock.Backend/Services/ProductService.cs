@@ -40,7 +40,7 @@ namespace NotiBlock.Backend.Services
             _context.Products.Add(product);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Product created: {SerialNumber} by manufacturer {ManufacturerId}", 
+            _logger.LogInformation("Product created: {SerialNumber} by manufacturer {ManufacturerId}",
                 product.SerialNumber, manufacturerId);
 
             // ===== NOTIFICATION =====
@@ -69,7 +69,7 @@ namespace NotiBlock.Backend.Services
             {
                 if (product.OwnerId.HasValue)
                 {
-                    _logger.LogWarning("Attempted to register already owned product {SerialNumber} to consumer {ConsumerId}", 
+                    _logger.LogWarning("Attempted to register already owned product {SerialNumber} to consumer {ConsumerId}",
                         dto.SerialNumber, registererId);
                     throw new InvalidOperationException("Product already registered to a consumer");
                 }
@@ -84,12 +84,12 @@ namespace NotiBlock.Backend.Services
 
                 product.OwnerId = registererId;
                 product.RegisteredAt = DateTime.UtcNow;
-                
-                _logger.LogInformation("Product {SerialNumber} registered to consumer {ConsumerId}", 
+
+                _logger.LogInformation("Product {SerialNumber} registered to consumer {ConsumerId}",
                     dto.SerialNumber, registererId);
 
                 await _context.SaveChangesAsync();
-                
+
                 // ===== NOTIFICATIONS =====
                 var notifications = new List<NotificationCreateDTO>
                 {
@@ -142,7 +142,7 @@ namespace NotiBlock.Backend.Services
             {
                 if (product.ResellerId.HasValue)
                 {
-                    _logger.LogWarning("Attempted to register already assigned product {SerialNumber} to reseller {ResellerId}", 
+                    _logger.LogWarning("Attempted to register already assigned product {SerialNumber} to reseller {ResellerId}",
                         dto.SerialNumber, registererId);
                     throw new InvalidOperationException("Product already registered to a reseller");
                 }
@@ -157,8 +157,8 @@ namespace NotiBlock.Backend.Services
 
                 product.ResellerId = registererId;
                 product.RegisteredAt = DateTime.UtcNow;
-                
-                _logger.LogInformation("Product {SerialNumber} registered to reseller {ResellerId}", 
+
+                _logger.LogInformation("Product {SerialNumber} registered to reseller {ResellerId}",
                     dto.SerialNumber, registererId);
 
                 await _context.SaveChangesAsync();
@@ -196,7 +196,7 @@ namespace NotiBlock.Backend.Services
             }
             else
             {
-                _logger.LogWarning("Invalid role {Role} attempted to register product {SerialNumber}", 
+                _logger.LogWarning("Invalid role {Role} attempted to register product {SerialNumber}",
                     role, dto.SerialNumber);
                 throw new InvalidOperationException($"Invalid role '{role}' for registration");
             }
@@ -237,23 +237,6 @@ namespace NotiBlock.Backend.Services
 
         private async Task HandleRemoveResellerAsync(Product product, Guid userId, string role)
         {
-            // Only manufacturers can remove reseller assignments
-            if (role != RoleManufacturer)
-            {
-                _logger.LogWarning("Non-manufacturer {Role} {UserId} attempted to remove reseller from product {SerialNumber}",
-                    role, userId, product.SerialNumber);
-                throw new UnauthorizedAccessException("Only manufacturers can remove reseller assignments");
-            }
-
-            // Verify the manufacturer owns this product
-            if (product.ManufacturerId != userId)
-            {
-                _logger.LogWarning("Manufacturer {UserId} attempted to unregister product {SerialNumber} owned by manufacturer {ManufacturerId}",
-                    userId, product.SerialNumber, product.ManufacturerId);
-                throw new UnauthorizedAccessException("You can only unregister products you created");
-            }
-
-            // Check if reseller is assigned
             if (!product.ResellerId.HasValue)
             {
                 _logger.LogWarning("Attempted to remove reseller from product {SerialNumber} that has no reseller assigned",
@@ -261,7 +244,7 @@ namespace NotiBlock.Backend.Services
                 throw new InvalidOperationException("Product does not have a reseller assigned");
             }
 
-            // Check if product has been sold to consumer
+            // Product already in a consumer's possession cannot change reseller assignments
             if (product.OwnerId.HasValue)
             {
                 _logger.LogWarning("Attempted to remove reseller from product {SerialNumber} that has already been sold to consumer",
@@ -270,24 +253,82 @@ namespace NotiBlock.Backend.Services
             }
 
             var removedResellerId = product.ResellerId.Value;
-            product.ResellerId = null;
-            product.RegisteredAt = DateTime.UtcNow;
 
-            _logger.LogInformation("Product {SerialNumber} unregistered from reseller {ResellerId} by manufacturer {ManufacturerId}",
-                product.SerialNumber, removedResellerId, userId);
-
-            // ===== NOTIFICATION =====
-            await _notificationService.CreateNotificationAsync(new NotificationCreateDTO
+            if (role == RoleManufacturer)
             {
-                RecipientId = removedResellerId,
-                RecipientType = "reseller",
-                Type = NotificationType.Warning,
-                Title = "Product Removed from Inventory",
-                Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been removed from your inventory by the manufacturer.",
-                RelatedEntityId = product.Id,
-                RelatedEntityType = "product",
-                Priority = NotificationPriority.High
-            });
+                if (product.ManufacturerId != userId)
+                {
+                    _logger.LogWarning("Manufacturer {UserId} attempted to unregister product {SerialNumber} owned by manufacturer {ManufacturerId}",
+                        userId, product.SerialNumber, product.ManufacturerId);
+                    throw new UnauthorizedAccessException("You can only unregister products you created");
+                }
+
+                product.ResellerId = null;
+                product.RegisteredAt = DateTime.UtcNow;
+
+                _logger.LogInformation("Product {SerialNumber} unregistered from reseller {ResellerId} by manufacturer {ManufacturerId}",
+                    product.SerialNumber, removedResellerId, userId);
+
+                await _notificationService.CreateNotificationAsync(new NotificationCreateDTO
+                {
+                    RecipientId = removedResellerId,
+                    RecipientType = "reseller",
+                    Type = NotificationType.Warning,
+                    Title = "Product Removed from Inventory",
+                    Message = $"Product {product.SerialNumber} (Model: {product.Model}) has been removed from your inventory by the manufacturer.",
+                    RelatedEntityId = product.Id,
+                    RelatedEntityType = "product",
+                    Priority = NotificationPriority.High
+                });
+                return;
+            }
+
+            if (role == RoleReseller)
+            {
+                if (removedResellerId != userId)
+                {
+                    _logger.LogWarning("Reseller {UserId} attempted to remove reseller from product {SerialNumber} assigned to reseller {ResellerId}",
+                        userId, product.SerialNumber, removedResellerId);
+                    throw new UnauthorizedAccessException("You can only unregister products assigned to you");
+                }
+
+                product.ResellerId = null;
+                product.RegisteredAt = DateTime.UtcNow;
+
+                _logger.LogInformation("Reseller {ResellerId} removed product {SerialNumber} from their inventory",
+                    userId, product.SerialNumber);
+
+                await _notificationService.CreateBulkNotificationsAsync(new List<NotificationCreateDTO>
+                {
+                    new NotificationCreateDTO
+                    {
+                        RecipientId = userId,
+                        RecipientType = "reseller",
+                        Type = NotificationType.Info,
+                        Title = "Product Removed from Inventory",
+                        Message = $"You removed product {product.SerialNumber} (Model: {product.Model}) from your inventory.",
+                        RelatedEntityId = product.Id,
+                        RelatedEntityType = "product",
+                        Priority = NotificationPriority.Low
+                    },
+                    new NotificationCreateDTO
+                    {
+                        RecipientId = product.ManufacturerId,
+                        RecipientType = "manufacturer",
+                        Type = NotificationType.Info,
+                        Title = "Reseller Released Product",
+                        Message = $"A reseller removed product {product.SerialNumber} (Model: {product.Model}) from their inventory.",
+                        RelatedEntityId = product.Id,
+                        RelatedEntityType = "product",
+                        Priority = NotificationPriority.Normal
+                    }
+                });
+                return;
+            }
+
+            _logger.LogWarning("Invalid role {Role} attempted to remove reseller from product {SerialNumber}",
+                role, product.SerialNumber);
+            throw new UnauthorizedAccessException("Only manufacturers or assigned resellers can remove reseller assignments");
         }
 
         private async Task HandleRemoveConsumerAsync(Product product, Guid userId, string role)
@@ -462,14 +503,14 @@ namespace NotiBlock.Backend.Services
             // Authorization checks
             if (role == RoleManufacturer && product.ManufacturerId != userId)
             {
-                _logger.LogWarning("Manufacturer {ManufacturerId} attempted to update product {SerialNumber} owned by another manufacturer", 
+                _logger.LogWarning("Manufacturer {ManufacturerId} attempted to update product {SerialNumber} owned by another manufacturer",
                     userId, serialNumber);
                 throw new UnauthorizedAccessException("You can only update your own products");
             }
 
             if (role == RoleReseller && product.ResellerId != userId)
             {
-                _logger.LogWarning("Reseller {ResellerId} attempted to update product {SerialNumber} not assigned to them", 
+                _logger.LogWarning("Reseller {ResellerId} attempted to update product {SerialNumber} not assigned to them",
                     userId, serialNumber);
                 throw new UnauthorizedAccessException("You can only update products assigned to you");
             }
@@ -486,13 +527,13 @@ namespace NotiBlock.Backend.Services
                 var resellerExists = await _context.Resellers.AnyAsync(r => r.Id == dto.ResellerId.Value && !r.IsDeleted);
                 if (!resellerExists)
                 {
-                    _logger.LogWarning("Attempted to assign product {SerialNumber} to non-existent reseller {ResellerId}", 
+                    _logger.LogWarning("Attempted to assign product {SerialNumber} to non-existent reseller {ResellerId}",
                         serialNumber, dto.ResellerId);
                     throw new ArgumentException($"Reseller with ID {dto.ResellerId} not found");
                 }
 
                 product.ResellerId = dto.ResellerId;
-                _logger.LogInformation("Product {SerialNumber} assigned to reseller {ResellerId}", 
+                _logger.LogInformation("Product {SerialNumber} assigned to reseller {ResellerId}",
                     serialNumber, dto.ResellerId);
 
                 // Notify reseller
@@ -522,13 +563,13 @@ namespace NotiBlock.Backend.Services
                 var consumerExists = await _context.Consumers.AnyAsync(c => c.Id == dto.OwnerId.Value && !c.IsDeleted);
                 if (!consumerExists)
                 {
-                    _logger.LogWarning("Attempted to assign product {SerialNumber} to non-existent consumer {OwnerId}", 
+                    _logger.LogWarning("Attempted to assign product {SerialNumber} to non-existent consumer {OwnerId}",
                         serialNumber, dto.OwnerId);
                     throw new ArgumentException($"Consumer with ID {dto.OwnerId} not found");
                 }
 
                 product.OwnerId = dto.OwnerId;
-                _logger.LogInformation("Product {SerialNumber} assigned to consumer {OwnerId}", 
+                _logger.LogInformation("Product {SerialNumber} assigned to consumer {OwnerId}",
                     serialNumber, dto.OwnerId);
 
                 // Notify consumer
@@ -560,7 +601,7 @@ namespace NotiBlock.Backend.Services
 
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Product {SerialNumber} updated by {Role} {UserId}", 
+            _logger.LogInformation("Product {SerialNumber} updated by {Role} {UserId}",
                 serialNumber, role, userId);
 
             // Send notifications if any
@@ -587,7 +628,7 @@ namespace NotiBlock.Backend.Services
 
             if (product == null)
             {
-                _logger.LogWarning("User {UserId} attempted to delete non-existent product: {SerialNumber}", 
+                _logger.LogWarning("User {UserId} attempted to delete non-existent product: {SerialNumber}",
                     userId, serialNumber);
                 throw new KeyNotFoundException($"Product with serial number {serialNumber} not found");
             }
@@ -595,7 +636,7 @@ namespace NotiBlock.Backend.Services
             // Check if already deleted
             if (product.IsDeleted)
             {
-                _logger.LogWarning("User {UserId} attempted to delete already deleted product: {SerialNumber}", 
+                _logger.LogWarning("User {UserId} attempted to delete already deleted product: {SerialNumber}",
                     userId, serialNumber);
                 throw new InvalidOperationException($"Product {serialNumber} is already deleted");
             }
@@ -603,7 +644,7 @@ namespace NotiBlock.Backend.Services
             // Authorization: Only the manufacturer who created the product can delete it
             if (product.ManufacturerId != userId)
             {
-                _logger.LogWarning("Manufacturer {UserId} attempted to delete product {SerialNumber} owned by manufacturer {ManufacturerId}", 
+                _logger.LogWarning("Manufacturer {UserId} attempted to delete product {SerialNumber} owned by manufacturer {ManufacturerId}",
                     userId, serialNumber, product.ManufacturerId);
                 throw new UnauthorizedAccessException("You can only delete products you created");
             }
@@ -611,7 +652,7 @@ namespace NotiBlock.Backend.Services
             // Check if product is assigned to reseller or consumer
             if (product.ResellerId.HasValue || product.OwnerId.HasValue)
             {
-                _logger.LogWarning("Manufacturer {UserId} attempted to delete product {SerialNumber} that is already in distribution chain", 
+                _logger.LogWarning("Manufacturer {UserId} attempted to delete product {SerialNumber} that is already in distribution chain",
                     userId, serialNumber);
                 throw new InvalidOperationException("Cannot delete product that has been assigned to resellers or consumers. Contact support for assistance.");
             }
@@ -623,7 +664,7 @@ namespace NotiBlock.Backend.Services
 
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Product {SerialNumber} soft deleted by manufacturer {UserId} at {DeletedAt}", 
+            _logger.LogInformation("Product {SerialNumber} soft deleted by manufacturer {UserId} at {DeletedAt}",
                 serialNumber, userId, product.DeletedAt);
 
             // ===== NOTIFICATION =====

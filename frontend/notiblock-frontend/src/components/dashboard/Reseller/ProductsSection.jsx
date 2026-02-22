@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FiPlus, FiTrash2, FiPackage } from 'react-icons/fi';
+import { FiPlus, FiPackage, FiUserMinus, FiLogOut } from 'react-icons/fi';
 import { getMyProducts, registerProduct, unregisterProduct } from '../../../api/products';
 import { useToast } from '../../../hooks/useToast';
 import Toast from '../../shared/Toast';
@@ -43,16 +43,29 @@ export default function ProductsSection() {
     }
   };
 
-  const handleUnregister = async (serialNumber) => {
-    if (!window.confirm('Are you sure you want to unregister this product?')) return;
-    
+  const handleUnregisterConsumer = async (serialNumber) => {
+    if (!window.confirm('Remove the consumer from this product?')) return;
+
     try {
-      await unregisterProduct({ serialNumber, type: 1 }); // Type 1 for reseller (removes consumer association)
-      success('Product unregistered successfully!');
+      await unregisterProduct({ serialNumber, type: 1 }); // Remove consumer assignment
+      success('Consumer unregistered from product.');
       fetchProducts();
     } catch (err) {
-      console.error('Error unregistering product:', err);
-      error(err.response?.data?.message || 'Failed to unregister product');
+      console.error('Error unregistering consumer:', err);
+      error(err.response?.data?.message || 'Failed to unregister consumer');
+    }
+  };
+
+  const handleReleaseFromInventory = async (serialNumber) => {
+    if (!window.confirm('Remove this product from your inventory?')) return;
+
+    try {
+      await unregisterProduct({ serialNumber, type: 0 }); // Remove reseller assignment
+      success('Product removed from your inventory.');
+      fetchProducts();
+    } catch (err) {
+      console.error('Error removing product from inventory:', err);
+      error(err.response?.data?.message || 'Failed to remove product from inventory');
     }
   };
 
@@ -139,13 +152,26 @@ export default function ProductsSection() {
                     {product.registeredAt ? new Date(product.registeredAt).toLocaleDateString() : 'N/A'}
                   </td>
                   <td className="py-3 px-4">
-                    <button
-                      onClick={() => handleUnregister(product.serialNumber)}
-                      className="text-red-600 hover:text-red-800 transition-colors"
-                      title="Unregister Product"
-                    >
-                      <FiTrash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                      {product.owner && (
+                        <button
+                          onClick={() => handleUnregisterConsumer(product.serialNumber)}
+                          className="text-yellow-600 hover:text-yellow-800 transition-colors"
+                          title="Unregister consumer"
+                        >
+                          <FiUserMinus className="w-4 h-4" />
+                        </button>
+                      )}
+                      {!product.owner && (
+                        <button
+                          onClick={() => handleReleaseFromInventory(product.serialNumber)}
+                          className="text-red-600 hover:text-red-800 transition-colors"
+                          title="Remove from inventory"
+                        >
+                          <FiLogOut className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -1,1 +1,48 @@
-backend/NotiBlock.Backend/obj/NotiBlock.Backend.csproj.nuget.dgspec.json
+# Environment and Secrets
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Build artifacts
+backend/NotiBlock.Backend/bin/
+backend/NotiBlock.Backend/obj/
+backend/.demo-build/
+frontend/notiblock-frontend/dist/
+frontend/notiblock-frontend/node_modules/
+blockchain/node_modules/
+blockchain/dist/
+blockchain/artifacts/
+blockchain/cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.user
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Database backups
+*.sql
+*.sql.gz
+
+# Blockchain
+blockchain/typechain-types/
+blockchain/artifacts/
+backend/.demo-build/zh-Hant/Microsoft.CodeAnalysis.Workspaces.resources.dll
+backend/.demo-build/Microsoft.AspNetCore.Authentication.JwtBearer.dll

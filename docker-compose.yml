@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: notiblock-db
+    environment:
+      POSTGRES_USER: notiblock_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-notiblock_secure_password_change_me}
+      POSTGRES_DB: notiblock_db
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - notiblock-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notiblock_user -d notiblock_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # .NET Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: notiblock-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Database Configuration
+      ConnectionStrings__DefaultConnection: "Server=db;Port=5432;Database=notiblock_db;User Id=notiblock_user;Password=${DB_PASSWORD:-notiblock_secure_password_change_me};"
+      
+      # JWT Settings
+      JwtSettings__Key: ${JWT_KEY:-your-super-secret-jwt-key-change-this-in-production-at-least-32-chars}
+      JwtSettings__Issuer: NotiBlockAPI
+      JwtSettings__Audience: NotiBlockUsers
+      JwtSettings__ExpirationMinutes: 480
+      JwtSettings__RefreshTokenExpirationDays: 7
+      
+      # Blockchain Configuration
+      Blockchain__RpcUrl: ${BLOCKCHAIN_RPC_URL:-https://rpc-mumbai.maticvigil.com}
+      Blockchain__PrivateKey: ${BLOCKCHAIN_PRIVATE_KEY:-}
+      Blockchain__ContractAddress: ${BLOCKCHAIN_CONTRACT_ADDRESS:-}
+      
+      # CORS Settings - Allow frontend and localhost
+      CorsSettings__AllowedOrigin: ${CORS_ORIGIN:-http://localhost}
+      
+      # Logging
+      Serilog__MinimumLevel__Default: Information
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+    ports:
+      - "5271:5271"
+      - "7179:7179"
+    volumes:
+      - ./NotiBlock.Backend/logs:/app/logs
+    networks:
+      - notiblock-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5271/api/auth/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./
+      dockerfile: frontend/Dockerfile
+    container_name: notiblock-web
+    depends_on:
+      - backend
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5271}
+    ports:
+      - "80:80"
+      - "3000:80"
+    networks:
+      - notiblock-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  notiblock-network:
+    driver: bridge

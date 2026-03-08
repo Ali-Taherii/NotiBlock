@@ -121,6 +121,125 @@ Stakeholders
 
    The API will be available at https://localhost:xxxx and Swagger UI at /swagger
 
+## Docker Setup
+
+### Quick Start with Docker Compose
+
+The easiest way to run the entire stack (backend, frontend, PostgreSQL) is with Docker Compose:
+
+1. **Create `.env` file** from the provided template:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Edit `.env`** with your configuration:
+   ```env
+   # Database
+   DB_PASSWORD=your_secure_db_password
+   
+   # JWT Settings (must be 32+ characters)
+   JWT_KEY=your-super-secret-jwt-key-at-least-32-characters-long
+   
+   # Blockchain
+   BLOCKCHAIN_RPC_URL=https://rpc-mumbai.maticvigil.com
+   BLOCKCHAIN_PRIVATE_KEY=your_private_key_without_0x
+   BLOCKCHAIN_CONTRACT_ADDRESS=0x0f41904d1F083989B70BD223FCa6feD911002aFD
+   
+   # API & CORS
+   CORS_ORIGIN=http://localhost
+   ASPNETCORE_ENVIRONMENT=Production
+   VITE_API_BASE_URL=http://localhost:5271
+   ```
+
+3. **Start all services**:
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Access the application**:
+   - Frontend: http://localhost (or port 3000)
+   - Backend API: http://localhost:5271
+   - API Health: http://localhost:5271/api/auth/health
+
+### Service Details
+
+| Service | Port | Technology | Notes |
+|---------|------|-----------|-------|
+| Frontend | 80, 3000 | React + Nginx | SPA with built-in API proxy to backend |
+| Backend | 5271, 7179 | .NET 8 + Kestrel | HTTP and HTTPS endpoints |
+| Database | 5432 | PostgreSQL 16 | Data persistence with initialized schema |
+
+### Common Docker Commands
+
+**View logs**:
+```bash
+# All services
+docker-compose logs -f
+
+# Specific service
+docker-compose logs -f backend
+docker-compose logs -f frontend
+docker-compose logs -f db
+```
+
+**Stop services**:
+```bash
+docker-compose down
+```
+
+**Stop and remove data** (clean slate):
+```bash
+docker-compose down -v
+```
+
+**Rebuild images** (if you make code changes):
+```bash
+docker-compose up -d --build
+```
+
+**Access database directly**:
+```bash
+docker-compose exec db psql -U notiblock_user -d notiblock_db
+```
+
+### Build Individual Services
+
+**Backend only**:
+```bash
+docker build -t notiblock-api:latest ./backend -f ./backend/Dockerfile
+docker run -d --name notiblock-api -p 5271:5271 -p 7179:7179 \
+  -e ConnectionStrings__DefaultConnection="..." \
+  -e JwtSettings__Key="..." \
+  notiblock-api:latest
+```
+
+**Frontend only**:
+```bash
+docker build -t notiblock-web:latest ./ -f ./frontend/Dockerfile
+docker run -d --name notiblock-web -p 80:80 notiblock-web:latest
+```
+
+### Troubleshooting
+
+**Port already in use**:
+Change the port mapping in `docker-compose.yml` (e.g., `"8080:80"` instead of `"80:80"`)
+
+**Database connection failed**:
+- Ensure `db` service is healthy: `docker-compose logs db`
+- Check environment variable `ConnectionStrings__DefaultConnection` is set correctly
+- Wait for PostgreSQL to initialize (takes 10-15 seconds on first run)
+
+**Frontend can't reach backend API**:
+- Verify `VITE_API_BASE_URL` matches the backend service URL in `docker-compose.yml`
+- Frontend service proxies `/api/` to backend service via nginx
+
+**Rebuild everything from scratch**:
+```bash
+docker-compose down -v
+docker system prune -a
+docker-compose up -d --build
+```
+
 ## Blockchain Integration
 
 Smart contract: NotiBlockDemo.sol (Polygon Mumbai testnet)

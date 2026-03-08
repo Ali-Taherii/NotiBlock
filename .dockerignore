@@ -1,0 +1,46 @@
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Build and dependency artifacts
+node_modules/
+bin/
+obj/
+dist/
+.vs/
+.vscode/
+*.csproj.user
+*.suo
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Environment secrets (never in Docker)
+.env
+.env.local
+
+# Testing
+coverage/
+.nyc_output/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Blockchain
+cache/
+artifacts/
+typechain-types/
+
+# Development
+.eslintignore
+.prettierignore

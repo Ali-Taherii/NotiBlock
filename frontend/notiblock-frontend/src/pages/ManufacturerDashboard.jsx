@@ -4,7 +4,8 @@ import NotificationDropdown from '../components/shared/NotificationDropdown'
 import ProductsSection from '../components/dashboard/Manufacturer/ProductsSection'
 import ApprovedTicketsSection from '../components/dashboard/Manufacturer/ApprovedTicketsSection'
 import RecallsSection from '../components/dashboard/Manufacturer/RecallsSection'
-import { FiPackage, FiCheckCircle, FiAlertTriangle } from 'react-icons/fi'
+import ProfileSettings from '../components/dashboard/shared/ProfileSettings'
+import { FiPackage, FiCheckCircle, FiAlertTriangle, FiUser } from 'react-icons/fi'
 
 export default function ManufacturerDashboard() {
   const [activeTab, setActiveTab] = useState('products')
@@ -13,6 +14,7 @@ export default function ManufacturerDashboard() {
     { id: 'products', label: 'Products', icon: FiPackage },
     { id: 'tickets', label: 'Approved Tickets', icon: FiCheckCircle },
     { id: 'recalls', label: 'My Recalls', icon: FiAlertTriangle },
+    { id: 'profile', label: 'Profile', icon: FiUser },
   ]
 
   const renderContent = () => {
@@ -23,6 +25,8 @@ export default function ManufacturerDashboard() {
         return <ApprovedTicketsSection />
       case 'recalls':
         return <RecallsSection />
+      case 'profile':
+        return <ProfileSettings />
       default:
         return <ProductsSection />
     }

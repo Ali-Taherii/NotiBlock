@@ -7,6 +7,7 @@ namespace NotiBlock.Backend.Interfaces
     {
         // CRUD operations
         Task<ConsumerReport> SubmitReportAsync(ConsumerReportCreateDTO dto, Guid consumerId);
+        Task<BulkOperationResultDTO<ConsumerReport>> SubmitReportsBulkAsync(List<ConsumerReportCreateDTO> items, Guid consumerId);
         Task<ConsumerReport> GetReportByIdAsync(Guid id);
         Task<ConsumerReport> UpdateReportAsync(Guid id, ConsumerReportUpdateDTO dto, Guid consumerId);
         Task<bool> DeleteReportAsync(Guid id, Guid consumerId);

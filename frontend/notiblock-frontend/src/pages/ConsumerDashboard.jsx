@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { FiPackage, FiFileText, FiAlertTriangle } from 'react-icons/fi';
+import { FiPackage, FiFileText, FiAlertTriangle, FiUser } from 'react-icons/fi';
 import LogoutButton from '../components/shared/LogoutButton';
 import NotificationDropdown from '../components/shared/NotificationDropdown';
 import MyProductsSection from '../components/dashboard/Consumer/MyProductsSection';
 import MyReportsSection from '../components/dashboard/Consumer/MyReportsSection';
 import ActiveRecallsSection from '../components/dashboard/Consumer/ActiveRecallsSection';
+import ProfileSettings from '../components/dashboard/shared/ProfileSettings';
 
 export default function ConsumerDashboard() {
   const [activeTab, setActiveTab] = useState('products');
@@ -13,6 +14,7 @@ export default function ConsumerDashboard() {
     { id: 'products', label: 'My Products', icon: FiPackage },
     { id: 'reports', label: 'My Reports', icon: FiFileText },
     { id: 'recalls', label: 'Active Recalls', icon: FiAlertTriangle },
+    { id: 'profile', label: 'Profile', icon: FiUser },
   ];
 
   return (
@@ -54,6 +56,7 @@ export default function ConsumerDashboard() {
           {activeTab === 'products' && <MyProductsSection />}
           {activeTab === 'reports' && <MyReportsSection />}
           {activeTab === 'recalls' && <ActiveRecallsSection />}
+          {activeTab === 'profile' && <ProfileSettings />}
         </div>
       </div>
     </div>

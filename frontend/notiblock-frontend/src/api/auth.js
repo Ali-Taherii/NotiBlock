@@ -124,6 +124,15 @@ export const authService = {
         return response?.data || response;
     },
 
+    /**
+     * Fetch full profile details for the authenticated user
+     * @returns {Promise<Object>} Profile data
+     */
+    async getProfile() {
+        const response = await apiClient.get('/auth/profile');
+        return response?.data || response;
+    },
+
     // ============================================================================
     // PASSWORD & ACCOUNT MANAGEMENT
     // ============================================================================

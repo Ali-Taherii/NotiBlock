@@ -36,6 +36,44 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
+        [HttpPost("create/bulk")]
+        [Authorize(Roles = "manufacturer")]
+        public async Task<IActionResult> CreateBulk([FromBody] BulkRequestDTO<ProductCreateDTO> dto)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var result = await _service.CreateProductsBulkAsync(dto.Items, userId);
+
+                _logger.LogInformation("Bulk product create completed by user {UserId}. Success: {SuccessCount}, Failed: {FailedCount}",
+                    userId, result.Succeeded, result.Failed);
+
+                return Ok(ApiResponse<BulkOperationResultDTO<object>>.SuccessResponse(new BulkOperationResultDTO<object>
+                {
+                    Total = result.Total,
+                    Succeeded = result.Succeeded,
+                    Failed = result.Failed,
+                    Results = result.Results.Select(r => new BulkOperationItemResultDTO<object>
+                    {
+                        Index = r.Index,
+                        Success = r.Success,
+                        Message = r.Message,
+                        Data = r.Data
+                    }).ToList()
+                }, "Bulk product creation completed"));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid bulk product creation request");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating products in bulk");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while creating products"));
+            }
+        }
+
         [HttpPost("register")]
         [Authorize(Roles = "consumer,reseller")]
         public async Task<IActionResult> Register([FromBody] ProductRegisterDTO dto)
@@ -70,6 +108,45 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
+        [HttpPost("register/bulk")]
+        [Authorize(Roles = "consumer,reseller")]
+        public async Task<IActionResult> RegisterBulk([FromBody] BulkRequestDTO<ProductRegisterDTO> dto)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+                var result = await _service.RegisterProductsBulkAsync(dto.Items, userId, role);
+
+                _logger.LogInformation("Bulk product registration completed by user {UserId} with role {Role}. Success: {SuccessCount}, Failed: {FailedCount}",
+                    userId, role, result.Succeeded, result.Failed);
+
+                return Ok(ApiResponse<BulkOperationResultDTO<object>>.SuccessResponse(new BulkOperationResultDTO<object>
+                {
+                    Total = result.Total,
+                    Succeeded = result.Succeeded,
+                    Failed = result.Failed,
+                    Results = result.Results.Select(r => new BulkOperationItemResultDTO<object>
+                    {
+                        Index = r.Index,
+                        Success = r.Success,
+                        Message = r.Message,
+                        Data = r.Data
+                    }).ToList()
+                }, "Bulk product registration completed"));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid bulk product registration request");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error registering products in bulk");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while registering products"));
+            }
+        }
+
         [HttpPost("unregister")]
         [Authorize(Roles = "manufacturer,reseller,consumer")]  // Added consumer role
         public async Task<IActionResult> Unregister([FromBody] ProductUnregisterDTO dto)
@@ -79,7 +156,7 @@ namespace NotiBlock.Backend.Controllers
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
                 var result = await _service.UnregisterProductAsync(dto, userId, role);
-                
+
                 string message = dto.Type switch
                 {
                     UnregisterType.RemoveReseller => "Reseller removed from product successfully",
@@ -87,7 +164,7 @@ namespace NotiBlock.Backend.Controllers
                     UnregisterType.SelfUnregister => "You have successfully unregistered from this product",
                     _ => "Product unregistered successfully"
                 };
-                
+
                 _logger.LogInformation("Product unregistered successfully by user {UserId} with role {Role}", userId, role);
                 return Ok(ApiResponse<object>.SuccessResponse(result, message));
             }
@@ -231,10 +308,10 @@ namespace NotiBlock.Backend.Controllers
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var result = await _service.GetManufacturerProductsAsync(userId, page, pageSize);
-                
+
                 _logger.LogInformation("Retrieved products for manufacturer {UserId}", userId);
                 return Ok(ApiResponse<PagedResultsDTO<ProductResponseDTO>>.SuccessResponse(
-                    result, 
+                    result,
                     $"Retrieved {result.Items.Count} products"
                 ));
             }
@@ -253,7 +330,7 @@ namespace NotiBlock.Backend.Controllers
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var result = await _service.GetResellerProductsAsync(userId, page, pageSize);
-                
+
                 _logger.LogInformation("Retrieved products for reseller {UserId}", userId);
                 return Ok(ApiResponse<PagedResultsDTO<ProductResponseDTO>>.SuccessResponse(
                     result,
@@ -276,7 +353,7 @@ namespace NotiBlock.Backend.Controllers
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var result = await _service.GetConsumerProductsAsync(userId, page, pageSize);
-                
+
                 _logger.LogInformation("Retrieved products for consumer {UserId}", userId);
                 return Ok(ApiResponse<PagedResultsDTO<ProductResponseDTO>>.SuccessResponse(
                     result,

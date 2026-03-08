@@ -4,8 +4,16 @@ export async function createProduct(data) {
     return await apiClient.post("/products/create", data);
 }
 
+export async function createProductsBulk(items) {
+    return await apiClient.post("/products/create/bulk", { items });
+}
+
 export async function registerProduct(data) {
     return await apiClient.post("/products/register", data);
+}
+
+export async function registerProductsBulk(items) {
+    return await apiClient.post("/products/register/bulk", { items });
 }
 
 export async function unregisterProduct(data) {

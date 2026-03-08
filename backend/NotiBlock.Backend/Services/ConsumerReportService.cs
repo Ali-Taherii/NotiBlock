@@ -7,7 +7,7 @@ using NotiBlock.Backend.Models;
 namespace NotiBlock.Backend.Services
 {
     public class ConsumerReportService(
-        AppDbContext context, 
+        AppDbContext context,
         ILogger<ConsumerReportService> logger,
         INotificationService notificationService) : IConsumerReportService
     {
@@ -20,7 +20,7 @@ namespace NotiBlock.Backend.Services
             // Validate product exists - FIX: Use FirstOrDefaultAsync instead of FindAsync
             var product = await _context.Products
                 .FirstOrDefaultAsync(p => p.SerialNumber == dto.ProductSerialNumber.Trim());
-            
+
             if (product == null)
             {
                 _logger.LogWarning("Consumer {ConsumerId} attempted to report non-existent product {SerialNumber}",
@@ -38,8 +38,8 @@ namespace NotiBlock.Backend.Services
 
             // Check for existing open report for this product
             var existingReport = await _context.ConsumerReports
-                .AnyAsync(r => r.ConsumerId == consumerId && 
-                              r.SerialNumber == dto.ProductSerialNumber.Trim() && 
+                .AnyAsync(r => r.ConsumerId == consumerId &&
+                              r.SerialNumber == dto.ProductSerialNumber.Trim() &&
                               r.Status == ReportStatus.Pending);
 
             if (existingReport)
@@ -68,6 +68,49 @@ namespace NotiBlock.Backend.Services
             await SendReportSubmittedNotificationsAsync(report.Id, consumerId, product);
 
             return report;
+        }
+
+        public async Task<BulkOperationResultDTO<ConsumerReport>> SubmitReportsBulkAsync(List<ConsumerReportCreateDTO> items, Guid consumerId)
+        {
+            if (items == null || items.Count == 0)
+            {
+                throw new ArgumentException("At least one report is required");
+            }
+
+            var result = new BulkOperationResultDTO<ConsumerReport>
+            {
+                Total = items.Count
+            };
+
+            for (var index = 0; index < items.Count; index++)
+            {
+                var item = items[index];
+                try
+                {
+                    var report = await SubmitReportAsync(item, consumerId);
+                    result.Results.Add(new BulkOperationItemResultDTO<ConsumerReport>
+                    {
+                        Index = index,
+                        Success = true,
+                        Message = $"Report submitted for product {report.SerialNumber}",
+                        Data = report
+                    });
+                    result.Succeeded++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Bulk report submission failed at index {Index}", index);
+                    result.Results.Add(new BulkOperationItemResultDTO<ConsumerReport>
+                    {
+                        Index = index,
+                        Success = false,
+                        Message = ex.Message
+                    });
+                    result.Failed++;
+                }
+            }
+
+            return result;
         }
 
         public async Task<ConsumerReport> GetReportByIdAsync(Guid id)
@@ -348,7 +391,7 @@ namespace NotiBlock.Backend.Services
                     {
                         throw new ArgumentException("ResellerTicketId is required for escalation");
                     }
-                    
+
                     // Validate ticket exists and belongs to reseller
                     var ticket = await _context.ResellerTickets.FindAsync(dto.ResellerTicketId.Value);
                     if (ticket == null || ticket.ResellerId != resellerId)
@@ -412,8 +455,8 @@ namespace NotiBlock.Backend.Services
         }
 
         public async Task<PagedResultsDTO<ConsumerReportResponseDTO>> GetResellerRelatedReportsAsync(
-            Guid resellerId, 
-            int page, 
+            Guid resellerId,
+            int page,
             int pageSize)
         {
             if (page < 1)
@@ -436,7 +479,7 @@ namespace NotiBlock.Backend.Services
                         select report;
 
             var totalCount = await query.CountAsync();
-            
+
             // eagerly load Manufacturer safely
             var reports = await query
                 .Include(r => r.Consumer)
@@ -449,9 +492,9 @@ namespace NotiBlock.Backend.Services
 
             _logger.LogInformation(
                 "Retrieved {Count} consumer reports for reseller {ResellerId} (Page {Page} of {TotalPages})",
-                reports.Count, 
-                resellerId, 
-                page, 
+                reports.Count,
+                resellerId,
+                page,
                 Math.Ceiling(totalCount / (double)pageSize)
             );
 
@@ -521,9 +564,9 @@ namespace NotiBlock.Backend.Services
         }
 
         private async Task SendReportStatusChangedNotificationsAsync(
-            Guid reportId, 
-            ReportStatus oldStatus, 
-            ReportStatus newStatus, 
+            Guid reportId,
+            ReportStatus oldStatus,
+            ReportStatus newStatus,
             ReportAction action,
             Guid resellerId)
         {
@@ -632,7 +675,7 @@ namespace NotiBlock.Backend.Services
                 ConsumerName = report.Consumer?.Name ?? "Unknown",
                 ConsumerEmail = report.Consumer?.Email ?? string.Empty,
                 SerialNumber = report.SerialNumber,
-                
+
                 // Add product information
                 Product = report.Product != null ? new ProductBasicInfoDTO
                 {
@@ -641,7 +684,7 @@ namespace NotiBlock.Backend.Services
                     Model = report.Product.Model,
                     ManufacturerName = report.Product.Manufacturer?.CompanyName ?? "Unknown"
                 } : null,
-                
+
                 Description = report.Description,
                 Status = report.Status,
                 CreatedAt = report.CreatedAt,

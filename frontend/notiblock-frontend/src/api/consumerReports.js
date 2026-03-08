@@ -4,6 +4,10 @@ export async function submitReport(data) {
     return await apiClient.post("/consumer-reports", data);
 }
 
+export async function submitReportsBulk(items) {
+    return await apiClient.post("/consumer-reports/bulk", { items });
+}
+
 export async function getReportById(id) {
     return await apiClient.get(`/consumer-reports/${id}`);
 }

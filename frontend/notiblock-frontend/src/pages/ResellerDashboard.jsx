@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { FiPackage, FiFileText, FiCheckCircle } from 'react-icons/fi';
+import { FiPackage, FiFileText, FiCheckCircle, FiUser } from 'react-icons/fi';
 import LogoutButton from '../components/shared/LogoutButton';
 import NotificationDropdown from '../components/shared/NotificationDropdown';
 import ProductsSection from '../components/dashboard/Reseller/ProductsSection';
 import ConsumerReportsSection from '../components/dashboard/Reseller/ConsumerReportsSection';
 import MyTicketsSection from '../components/dashboard/Reseller/MyTicketsSection';
+import ProfileSettings from '../components/dashboard/shared/ProfileSettings';
 
 export default function ResellerDashboard() {
   const [activeTab, setActiveTab] = useState('products');
@@ -13,6 +14,7 @@ export default function ResellerDashboard() {
     { id: 'products', label: 'Products', icon: FiPackage },
     { id: 'reports', label: 'Consumer Reports', icon: FiFileText },
     { id: 'tickets', label: 'My Tickets', icon: FiCheckCircle },
+    { id: 'profile', label: 'Profile', icon: FiUser },
   ];
 
   return (
@@ -54,6 +56,7 @@ export default function ResellerDashboard() {
           {activeTab === 'products' && <ProductsSection />}
           {activeTab === 'reports' && <ConsumerReportsSection />}
           {activeTab === 'tickets' && <MyTicketsSection />}
+          {activeTab === 'profile' && <ProfileSettings />}
         </div>
       </div>
     </div>

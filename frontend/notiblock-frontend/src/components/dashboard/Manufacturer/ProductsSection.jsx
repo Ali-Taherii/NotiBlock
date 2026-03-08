@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { createProduct, getMyProducts, deleteProduct, unregisterProduct } from '../../../api/products';
+import { createProduct, createProductsBulk, getMyProducts, deleteProduct, unregisterProduct } from '../../../api/products';
 import { FiPlus, FiTrash2, FiPackage, FiUserMinus } from 'react-icons/fi';
 import { useToast } from '../../../hooks/useToast';
 import Toast from '../../shared/Toast';
@@ -12,6 +12,8 @@ export default function ProductsSection() {
     serialNumber: '',
     model: '',
   });
+  const [useBulk, setUseBulk] = useState(false);
+  const [bulkInput, setBulkInput] = useState('');
   const { toast, success, error, hideToast } = useToast();
 
   const fetchProducts = useCallback(async () => {
@@ -36,9 +38,35 @@ export default function ProductsSection() {
     e.preventDefault();
 
     try {
-      const response = await createProduct(formData);
-      success(response?.message || 'Product created successfully!');
-      setFormData({ serialNumber: '', model: '' });
+      if (useBulk) {
+        const items = bulkInput
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const [serialNumber, ...modelParts] = line.split(',').map((part) => part.trim());
+            return {
+              serialNumber,
+              model: modelParts.join(',')
+            };
+          })
+          .filter((item) => item.serialNumber && item.model);
+
+        if (!items.length) {
+          error('Please add valid lines in format: SERIAL_NUMBER,MODEL');
+          return;
+        }
+
+        const response = await createProductsBulk(items);
+        const result = response?.data;
+        success(`Bulk creation completed: ${result?.succeeded ?? 0} succeeded, ${result?.failed ?? 0} failed.`);
+        setBulkInput('');
+      } else {
+        const response = await createProduct(formData);
+        success(response?.message || 'Product created successfully!');
+        setFormData({ serialNumber: '', model: '' });
+      }
+
       setShowForm(false);
       fetchProducts();
     } catch (err) {
@@ -95,6 +123,28 @@ export default function ProductsSection() {
         <div className="mb-6 bg-white p-6 rounded-lg shadow border">
           <h3 className="text-lg font-semibold mb-4">Create New Product</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={useBulk}
+                onChange={(e) => setUseBulk(e.target.checked)}
+              />
+              Bulk mode
+            </label>
+            {useBulk ? (
+              <div>
+                <label className="block mb-1 font-medium">Bulk Products</label>
+                <textarea
+                  value={bulkInput}
+                  onChange={(e) => setBulkInput(e.target.value)}
+                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+                  rows="6"
+                  placeholder={'One per line: SERIAL_NUMBER,MODEL\nExample: ABC-123,Toaster X200'}
+                  required
+                />
+              </div>
+            ) : (
+              <>
             <div>
               <label className="block mb-1 font-medium">Serial Number</label>
               <input
@@ -117,12 +167,14 @@ export default function ProductsSection() {
                 placeholder="e.g., Toaster X200"
               />
             </div>
+              </>
+            )}
             <div className="flex gap-3">
               <button
                 type="submit"
                 className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
               >
-                Create Product
+                {useBulk ? 'Create Products (Bulk)' : 'Create Product'}
               </button>
               <button
                 type="button"

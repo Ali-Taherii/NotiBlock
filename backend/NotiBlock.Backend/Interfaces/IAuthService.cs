@@ -28,6 +28,7 @@ namespace NotiBlock.Backend.Interfaces
         // Common Auth Methods
         Task ChangePasswordAsync(Guid userId, string role, ChangePasswordDTO dto);
         Task<object> UpdateProfileAsync(Guid userId, string role, UpdateProfileDTO dto);
+        Task<object> GetProfileAsync(Guid userId, string role);
         Task DeleteAccountAsync(Guid userId, string role, string password);
         Task<bool> IsEmailAvailableAsync(string email, string userType);
         Task<object> GetUserStatsAsync(Guid userId, string role);

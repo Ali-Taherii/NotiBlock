@@ -47,6 +47,44 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
+        [HttpPost("bulk")]
+        [Authorize(Roles = "consumer")]
+        public async Task<IActionResult> SubmitBulk([FromBody] BulkRequestDTO<ConsumerReportCreateDTO> dto)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var result = await _service.SubmitReportsBulkAsync(dto.Items, userId);
+
+                _logger.LogInformation("Bulk report submit completed by consumer {UserId}. Success: {SuccessCount}, Failed: {FailedCount}",
+                    userId, result.Succeeded, result.Failed);
+
+                return Ok(ApiResponse<BulkOperationResultDTO<object>>.SuccessResponse(new BulkOperationResultDTO<object>
+                {
+                    Total = result.Total,
+                    Succeeded = result.Succeeded,
+                    Failed = result.Failed,
+                    Results = result.Results.Select(r => new BulkOperationItemResultDTO<object>
+                    {
+                        Index = r.Index,
+                        Success = r.Success,
+                        Message = r.Message,
+                        Data = r.Data
+                    }).ToList()
+                }, "Bulk report submission completed"));
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid bulk report submission request");
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error submitting reports in bulk");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while submitting reports"));
+            }
+        }
+
         [HttpGet("{id}")]
         [Authorize(Roles = "consumer,reseller,regulator")]
         public async Task<IActionResult> GetById(Guid id)
@@ -54,7 +92,7 @@ namespace NotiBlock.Backend.Controllers
             try
             {
                 var report = await _service.GetReportByIdAsync(id);
-                
+
                 // Authorization: Consumers can only view their own reports
                 var role = User.FindFirstValue(ClaimTypes.Role);
                 if (role == "consumer")
@@ -296,20 +334,20 @@ namespace NotiBlock.Backend.Controllers
         [HttpGet("reseller/related-reports")]
         [Authorize(Roles = "reseller")]
         public async Task<IActionResult> GetResellerRelatedReports(
-            [FromQuery] int page = 1, 
+            [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
             try
             {
                 var resellerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var result = await _service.GetResellerRelatedReportsAsync(resellerId, page, pageSize);
-                
+
                 _logger.LogInformation(
-                    "Retrieved {Count} related consumer reports for reseller {ResellerId}", 
-                    result.Items.Count, 
+                    "Retrieved {Count} related consumer reports for reseller {ResellerId}",
+                    result.Items.Count,
                     resellerId
                 );
-                
+
                 return Ok(ApiResponse<PagedResultsDTO<ConsumerReportResponseDTO>>.SuccessResponse(
                     result,
                     $"Retrieved {result.Items.Count} consumer reports for your products"

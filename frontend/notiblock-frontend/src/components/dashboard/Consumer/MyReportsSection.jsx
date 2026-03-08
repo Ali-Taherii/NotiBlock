@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FiPlus, FiFileText, FiEye } from 'react-icons/fi';
-import { getMyReports, submitReport } from '../../../api/consumerReports';
+import { getMyReports, submitReport, submitReportsBulk } from '../../../api/consumerReports';
 import { getMyProducts } from '../../../api/products';
 import { useToast } from '../../../hooks/useToast';
 import Toast from '../../shared/Toast';
@@ -15,6 +15,8 @@ export default function MyReportsSection() {
     productSerialNumber: '',
     issueDescription: '',
   });
+  const [useBulk, setUseBulk] = useState(false);
+  const [bulkInput, setBulkInput] = useState('');
   const { toast, success, error, hideToast } = useToast();
 
   const fetchReports = useCallback(async () => {
@@ -50,9 +52,35 @@ export default function MyReportsSection() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await submitReport(formData);
-      success('Report submitted successfully!');
-      setFormData({ productSerialNumber: '', issueDescription: '' });
+      if (useBulk) {
+        const items = bulkInput
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const [productSerialNumber, ...descriptionParts] = line.split('|').map((part) => part.trim());
+            return {
+              productSerialNumber,
+              issueDescription: descriptionParts.join('|')
+            };
+          })
+          .filter((item) => item.productSerialNumber && item.issueDescription);
+
+        if (!items.length) {
+          error('Please add valid lines in format: SERIAL_NUMBER|ISSUE_DESCRIPTION');
+          return;
+        }
+
+        const response = await submitReportsBulk(items);
+        const result = response?.data;
+        success(`Bulk submission completed: ${result?.succeeded ?? 0} succeeded, ${result?.failed ?? 0} failed.`);
+        setBulkInput('');
+      } else {
+        await submitReport(formData);
+        success('Report submitted successfully!');
+        setFormData({ productSerialNumber: '', issueDescription: '' });
+      }
+
       setShowCreateForm(false);
       fetchReports();
     } catch (err) {
@@ -127,6 +155,30 @@ export default function MyReportsSection() {
         <div className="bg-gray-50 p-6 rounded-lg mb-6 border border-gray-200">
           <h3 className="text-lg font-semibold mb-4">Submit New Report</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={useBulk}
+                onChange={(e) => setUseBulk(e.target.checked)}
+              />
+              Bulk mode
+            </label>
+            {useBulk ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Bulk Reports
+                </label>
+                <textarea
+                  value={bulkInput}
+                  onChange={(e) => setBulkInput(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  rows="7"
+                  placeholder={'One per line: SERIAL_NUMBER|ISSUE_DESCRIPTION\nExample: ABC-123|Device overheats after 5 minutes'}
+                  required
+                />
+              </div>
+            ) : (
+              <>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Product
@@ -157,11 +209,13 @@ export default function MyReportsSection() {
                 required
               />
             </div>
+              </>
+            )}
             <button
               type="submit"
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Submit Report
+              {useBulk ? 'Submit Reports (Bulk)' : 'Submit Report'}
             </button>
           </form>
         </div>

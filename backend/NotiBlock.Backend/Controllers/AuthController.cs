@@ -310,6 +310,33 @@ namespace NotiBlock.Backend.Controllers
             }
         }
 
+        // Get Profile Details
+        [Authorize]
+        [HttpGet("profile")]
+        public async Task<IActionResult> GetProfile()
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
+                var profile = await _service.GetProfileAsync(userId, role);
+                _logger.LogInformation("Profile retrieved for user {UserId}", userId);
+
+                return Ok(ApiResponse<object>.SuccessResponse(profile, "Profile retrieved successfully"));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Profile not found for current user");
+                return NotFound(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving profile");
+                return StatusCode(500, ApiResponse<object>.ErrorResponse("An error occurred while retrieving profile"));
+            }
+        }
+
         // Update Profile
         [Authorize]
         [HttpPut("profile")]

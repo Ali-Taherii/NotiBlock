@@ -59,6 +59,49 @@ namespace NotiBlock.Backend.Services
             return product;
         }
 
+        public async Task<BulkOperationResultDTO<Product>> CreateProductsBulkAsync(List<ProductCreateDTO> items, Guid manufacturerId)
+        {
+            if (items == null || items.Count == 0)
+            {
+                throw new ArgumentException("At least one product is required");
+            }
+
+            var result = new BulkOperationResultDTO<Product>
+            {
+                Total = items.Count
+            };
+
+            for (var index = 0; index < items.Count; index++)
+            {
+                var item = items[index];
+                try
+                {
+                    var createdProduct = await CreateProductAsync(item, manufacturerId);
+                    result.Results.Add(new BulkOperationItemResultDTO<Product>
+                    {
+                        Index = index,
+                        Success = true,
+                        Message = $"Product {createdProduct.SerialNumber} created successfully",
+                        Data = createdProduct
+                    });
+                    result.Succeeded++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Bulk create failed for product at index {Index}", index);
+                    result.Results.Add(new BulkOperationItemResultDTO<Product>
+                    {
+                        Index = index,
+                        Success = false,
+                        Message = ex.Message
+                    });
+                    result.Failed++;
+                }
+            }
+
+            return result;
+        }
+
         public async Task<Product> RegisterProductAsync(ProductRegisterDTO dto, Guid registererId, string role)
         {
             var product = await _context.Products
@@ -202,6 +245,49 @@ namespace NotiBlock.Backend.Services
             }
 
             return product;
+        }
+
+        public async Task<BulkOperationResultDTO<Product>> RegisterProductsBulkAsync(List<ProductRegisterDTO> items, Guid registererId, string role)
+        {
+            if (items == null || items.Count == 0)
+            {
+                throw new ArgumentException("At least one product is required");
+            }
+
+            var result = new BulkOperationResultDTO<Product>
+            {
+                Total = items.Count
+            };
+
+            for (var index = 0; index < items.Count; index++)
+            {
+                var item = items[index];
+                try
+                {
+                    var registeredProduct = await RegisterProductAsync(item, registererId, role);
+                    result.Results.Add(new BulkOperationItemResultDTO<Product>
+                    {
+                        Index = index,
+                        Success = true,
+                        Message = $"Product {registeredProduct.SerialNumber} registered successfully",
+                        Data = registeredProduct
+                    });
+                    result.Succeeded++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Bulk register failed for product at index {Index}", index);
+                    result.Results.Add(new BulkOperationItemResultDTO<Product>
+                    {
+                        Index = index,
+                        Success = false,
+                        Message = ex.Message
+                    });
+                    result.Failed++;
+                }
+            }
+
+            return result;
         }
 
         public async Task<Product> UnregisterProductAsync(ProductUnregisterDTO dto, Guid userId, string role)

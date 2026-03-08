@@ -11,6 +11,7 @@ namespace NotiBlock.Backend.Models
         [JsonIgnore]
         public string PasswordHash { get; set; } = string.Empty;
         public string WalletAddress { get; set; } = string.Empty;
+        public string? AvatarUrl { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime LastUpdatedAt { get; set; } = DateTime.UtcNow;
         public bool IsDeleted { get; set; } = false;

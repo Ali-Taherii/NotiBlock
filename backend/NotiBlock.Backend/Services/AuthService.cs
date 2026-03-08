@@ -5,6 +5,7 @@ using NotiBlock.Backend.DTOs.Auth;
 using NotiBlock.Backend.Helpers;
 using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Models;
+using System.ComponentModel.DataAnnotations;
 
 namespace NotiBlock.Backend.Services
 {
@@ -14,12 +15,13 @@ namespace NotiBlock.Backend.Services
         private readonly IConfiguration _config = config;
         private readonly ILogger<AuthService> _logger = logger;
         private readonly PasswordHasher<object> _hasher = new();
+        private readonly EmailAddressAttribute _emailValidator = new();
 
         #region Registration/Login
 
         // ==================== GENERIC REGISTRATION ====================
         private async Task<string> RegisterUserAsync<T>(
-            AuthRegisterDTO dto, 
+            AuthRegisterDTO dto,
             string role,
             Func<AuthRegisterDTO, T> userFactory,
             Func<string, Task<bool>> emailExistsCheck) where T : class
@@ -169,7 +171,7 @@ namespace NotiBlock.Backend.Services
         private void ValidatePassword(string password)
         {
             var (isValid, errorMessage) = PasswordValidator.Validate(password);
-            
+
             if (!isValid)
             {
                 _logger.LogWarning("Password validation failed: {ErrorMessage}", errorMessage);
@@ -314,7 +316,7 @@ namespace NotiBlock.Backend.Services
             };
 
             var verificationResult = _hasher.VerifyHashedPassword(new object(), currentPasswordHash, dto.CurrentPassword);
-            
+
             if (verificationResult == PasswordVerificationResult.Failed)
             {
                 _logger.LogWarning("Change password failed: incorrect current password for user {UserId}", userId);
@@ -353,102 +355,243 @@ namespace NotiBlock.Backend.Services
         // Update Profile
         public async Task<object> UpdateProfileAsync(Guid userId, string role, UpdateProfileDTO dto)
         {
-            object? user = role switch
+            if (string.IsNullOrWhiteSpace(role))
             {
-                "consumer" => await _context.Consumers.FindAsync(userId),
-                "reseller" => await _context.Resellers.FindAsync(userId),
-                "manufacturer" => await _context.Manufacturers.FindAsync(userId),
-                "regulator" => await _context.Regulators.FindAsync(userId),
-                _ => null
-            };
-
-            if (user == null)
-            {
-                _logger.LogWarning("Update profile failed: user not found for {UserId} with role {Role}", userId, role);
-                throw new KeyNotFoundException("User not found");
+                throw new ArgumentException("Role is required");
             }
 
             switch (role)
             {
                 case "consumer":
-                    var consumer = (Consumer)user;
+                    var consumer = await _context.Consumers.FindAsync(userId)
+                        ?? throw new KeyNotFoundException("User not found");
+
+                    await ApplyEmailUpdateAsync(role, userId, dto.Email, consumer.Email, email => consumer.Email = email);
+
                     if (!string.IsNullOrWhiteSpace(dto.Name))
                         consumer.Name = dto.Name.Trim();
                     if (!string.IsNullOrWhiteSpace(dto.PhoneNumber))
                         consumer.PhoneNumber = dto.PhoneNumber.Trim();
                     if (dto.WalletAddress != null)
                         consumer.WalletAddress = dto.WalletAddress.Trim();
+                    if (dto.AvatarUrl != null)
+                        consumer.AvatarUrl = NormalizeAvatar(dto.AvatarUrl);
+
+                    consumer.LastUpdatedAt = DateTime.UtcNow;
                     _context.Consumers.Update(consumer);
                     await _context.SaveChangesAsync();
                     _logger.LogInformation("Consumer profile updated for {UserId}", userId);
-                    return new
-                    {
-                        consumer.Id,
-                        consumer.Name,
-                        consumer.Email,
-                        consumer.PhoneNumber,
-                        consumer.WalletAddress,
-                        consumer.CreatedAt
-                    };
+                    return MapProfileResponse(role, consumer);
 
                 case "reseller":
-                    var reseller = (Reseller)user;
+                    var reseller = await _context.Resellers.FindAsync(userId)
+                        ?? throw new KeyNotFoundException("User not found");
+
+                    await ApplyEmailUpdateAsync(role, userId, dto.Email, reseller.Email, email => reseller.Email = email);
+
                     if (!string.IsNullOrWhiteSpace(dto.Name))
                         reseller.CompanyName = dto.Name.Trim();
                     if (dto.WalletAddress != null)
                         reseller.WalletAddress = dto.WalletAddress.Trim();
+                    if (dto.AvatarUrl != null)
+                        reseller.AvatarUrl = NormalizeAvatar(dto.AvatarUrl);
+
+                    reseller.LastUpdatedAt = DateTime.UtcNow;
                     _context.Resellers.Update(reseller);
                     await _context.SaveChangesAsync();
                     _logger.LogInformation("Reseller profile updated for {UserId}", userId);
-                    return new
-                    {
-                        reseller.Id,
-                        reseller.CompanyName,
-                        reseller.Email,
-                        reseller.WalletAddress,
-                        reseller.CreatedAt
-                    };
+                    return MapProfileResponse(role, reseller);
 
                 case "manufacturer":
-                    var manufacturer = (Manufacturer)user;
+                    var manufacturer = await _context.Manufacturers.FindAsync(userId)
+                        ?? throw new KeyNotFoundException("User not found");
+
+                    await ApplyEmailUpdateAsync(role, userId, dto.Email, manufacturer.Email, email => manufacturer.Email = email);
+
                     if (!string.IsNullOrWhiteSpace(dto.Name))
                         manufacturer.CompanyName = dto.Name.Trim();
                     if (dto.WalletAddress != null)
                         manufacturer.WalletAddress = dto.WalletAddress.Trim();
+                    if (dto.AvatarUrl != null)
+                        manufacturer.AvatarUrl = NormalizeAvatar(dto.AvatarUrl);
+
+                    manufacturer.LastUpdatedAt = DateTime.UtcNow;
                     _context.Manufacturers.Update(manufacturer);
                     await _context.SaveChangesAsync();
                     _logger.LogInformation("Manufacturer profile updated for {UserId}", userId);
-                    return new
-                    {
-                        manufacturer.Id,
-                        manufacturer.CompanyName,
-                        manufacturer.Email,
-                        manufacturer.WalletAddress,
-                        manufacturer.CreatedAt
-                    };
+                    return MapProfileResponse(role, manufacturer);
 
                 case "regulator":
-                    var regulator = (Regulator)user;
+                    var regulator = await _context.Regulators.FindAsync(userId)
+                        ?? throw new KeyNotFoundException("User not found");
+
+                    await ApplyEmailUpdateAsync(role, userId, dto.Email, regulator.Email, email => regulator.Email = email);
+
                     if (!string.IsNullOrWhiteSpace(dto.Name))
                         regulator.AgencyName = dto.Name.Trim();
                     if (dto.WalletAddress != null)
                         regulator.WalletAddress = dto.WalletAddress.Trim();
+                    if (dto.AvatarUrl != null)
+                        regulator.AvatarUrl = NormalizeAvatar(dto.AvatarUrl);
+
+                    regulator.LastUpdatedAt = DateTime.UtcNow;
                     _context.Regulators.Update(regulator);
                     await _context.SaveChangesAsync();
                     _logger.LogInformation("Regulator profile updated for {UserId}", userId);
-                    return new
-                    {
-                        regulator.Id,
-                        regulator.AgencyName,
-                        regulator.Email,
-                        regulator.WalletAddress,
-                        regulator.CreatedAt
-                    };
+                    return MapProfileResponse(role, regulator);
 
                 default:
                     throw new ArgumentException("Invalid user role");
             }
         }
+
+        public async Task<object> GetProfileAsync(Guid userId, string role)
+        {
+            if (string.IsNullOrWhiteSpace(role))
+            {
+                throw new ArgumentException("Role is required");
+            }
+
+            return role switch
+            {
+                "consumer" => MapProfileResponse(role, await _context.Consumers.FindAsync(userId)
+                    ?? throw new KeyNotFoundException("User not found")),
+                "reseller" => MapProfileResponse(role, await _context.Resellers.FindAsync(userId)
+                    ?? throw new KeyNotFoundException("User not found")),
+                "manufacturer" => MapProfileResponse(role, await _context.Manufacturers.FindAsync(userId)
+                    ?? throw new KeyNotFoundException("User not found")),
+                "regulator" => MapProfileResponse(role, await _context.Regulators.FindAsync(userId)
+                    ?? throw new KeyNotFoundException("User not found")),
+                _ => throw new ArgumentException("Invalid user role")
+            };
+        }
+
+        private async Task ApplyEmailUpdateAsync(string role, Guid userId, string? requestedEmail, string? existingEmail, Action<string> assignEmail)
+        {
+            if (requestedEmail == null)
+            {
+                return;
+            }
+
+            var normalizedEmail = NormalizeEmail(requestedEmail);
+
+            if (existingEmail != null && string.Equals(normalizedEmail, existingEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            await EnsureEmailUniqueAsync(role, normalizedEmail, userId);
+            assignEmail(normalizedEmail);
+        }
+
+        private string NormalizeEmail(string email)
+        {
+            var trimmed = email.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                throw new ArgumentException("Email cannot be empty");
+            }
+
+            if (!_emailValidator.IsValid(trimmed))
+            {
+                throw new ArgumentException("Invalid email format");
+            }
+
+            return trimmed.ToLowerInvariant();
+        }
+
+        private static string? NormalizeAvatar(string? avatarUrl)
+        {
+            if (avatarUrl == null)
+            {
+                return null;
+            }
+
+            var trimmed = avatarUrl.Trim();
+            return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+        }
+
+        private async Task EnsureEmailUniqueAsync(string role, string normalizedEmail, Guid userId)
+        {
+            bool exists = role switch
+            {
+                "consumer" => await _context.Consumers.AnyAsync(c => c.Email == normalizedEmail && c.Id != userId),
+                "reseller" => await _context.Resellers.AnyAsync(r => r.Email == normalizedEmail && r.Id != userId),
+                "manufacturer" => await _context.Manufacturers.AnyAsync(m => m.Email == normalizedEmail && m.Id != userId),
+                "regulator" => await _context.Regulators.AnyAsync(r => r.Email == normalizedEmail && r.Id != userId),
+                _ => false
+            };
+
+            if (exists)
+            {
+                _logger.LogWarning("Email update conflict for role {Role}: {Email}", role, normalizedEmail);
+                throw new InvalidOperationException("Email address is already in use");
+            }
+        }
+
+        private static object MapProfileResponse(string role, object entity)
+        {
+            return role switch
+            {
+                "consumer" => MapConsumerProfile((Consumer)entity),
+                "reseller" => MapResellerProfile((Reseller)entity),
+                "manufacturer" => MapManufacturerProfile((Manufacturer)entity),
+                "regulator" => MapRegulatorProfile((Regulator)entity),
+                _ => throw new ArgumentException("Invalid user role")
+            };
+        }
+
+        private static object MapConsumerProfile(Consumer consumer) => new
+        {
+            consumer.Id,
+            Role = "consumer",
+            Email = consumer.Email,
+            Name = consumer.Name,
+            PhoneNumber = consumer.PhoneNumber,
+            WalletAddress = consumer.WalletAddress,
+            AvatarUrl = consumer.AvatarUrl,
+            consumer.CreatedAt,
+            consumer.LastUpdatedAt
+        };
+
+        private static object MapResellerProfile(Reseller reseller) => new
+        {
+            reseller.Id,
+            Role = "reseller",
+            Email = reseller.Email,
+            Name = reseller.CompanyName,
+            CompanyName = reseller.CompanyName,
+            WalletAddress = reseller.WalletAddress,
+            AvatarUrl = reseller.AvatarUrl,
+            reseller.CreatedAt,
+            reseller.LastUpdatedAt
+        };
+
+        private static object MapManufacturerProfile(Manufacturer manufacturer) => new
+        {
+            manufacturer.Id,
+            Role = "manufacturer",
+            Email = manufacturer.Email,
+            Name = manufacturer.CompanyName,
+            CompanyName = manufacturer.CompanyName,
+            WalletAddress = manufacturer.WalletAddress,
+            AvatarUrl = manufacturer.AvatarUrl,
+            manufacturer.CreatedAt,
+            manufacturer.LastUpdatedAt
+        };
+
+        private static object MapRegulatorProfile(Regulator regulator) => new
+        {
+            regulator.Id,
+            Role = "regulator",
+            Email = regulator.Email,
+            Name = regulator.AgencyName,
+            AgencyName = regulator.AgencyName,
+            WalletAddress = regulator.WalletAddress,
+            AvatarUrl = regulator.AvatarUrl,
+            regulator.CreatedAt,
+            regulator.LastUpdatedAt
+        };
 
         // Check Email Availability
         public async Task<bool> IsEmailAvailableAsync(string email, string userType)
@@ -470,7 +613,7 @@ namespace NotiBlock.Backend.Services
                 _ => throw new ArgumentException("Invalid user type")
             };
 
-            _logger.LogInformation("Email availability checked for {Email} in {UserType}: {Available}", 
+            _logger.LogInformation("Email availability checked for {Email} in {UserType}: {Available}",
                 normalizedEmail, userType, !exists);
 
             return !exists; // Return true if email is available (not exists)
@@ -584,7 +727,7 @@ namespace NotiBlock.Backend.Services
             };
 
             var verificationResult = _hasher.VerifyHashedPassword(new object(), passwordHash, password);
-            
+
             if (verificationResult == PasswordVerificationResult.Failed)
             {
                 _logger.LogWarning("Account deletion failed: incorrect password for user {UserId}", userId);

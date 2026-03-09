@@ -16,7 +16,8 @@ namespace NotiBlock.Backend.Controllers
 
         [HttpPost]
         [Authorize(Roles = "consumer")]
-        public async Task<IActionResult> Submit([FromBody] ConsumerReportCreateDTO dto)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> Submit([FromForm] ConsumerReportCreateDTO dto)
         {
             try
             {
@@ -207,7 +208,7 @@ namespace NotiBlock.Backend.Controllers
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var result = await _service.GetConsumerReportsAsync(userId, page, pageSize);
                 _logger.LogInformation("Consumer {UserId} retrieved their reports (Page {Page})", userId, page);
-                return Ok(ApiResponse<PagedResultsDTO<ConsumerReport>>.SuccessResponse(result, $"Retrieved {result.Items.Count} reports"));
+                return Ok(ApiResponse<PagedResultsDTO<ConsumerReportResponseDTO>>.SuccessResponse(result, $"Retrieved {result.Items.Count} reports"));
             }
             catch (Exception ex)
             {

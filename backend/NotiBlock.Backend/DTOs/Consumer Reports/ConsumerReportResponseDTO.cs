@@ -16,7 +16,23 @@ namespace NotiBlock.Backend.DTOs
         // product details for reseller context
         public ProductBasicInfoDTO? Product { get; set; }
 
-        public string Description { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty; public string? PhotoPath { get; set; }
+
+        // Computed property for PhotoUrl
+        public string? PhotoUrl
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(PhotoPath))
+                    return null;
+
+                // Convert relative path to absolute URL
+                // Path format: uploads/reports/filename.jpg
+                // URL format: /uploads/reports/filename.jpg
+                return $"/{PhotoPath.Replace("\\", "/")}";
+            }
+        }
+
         public ReportStatus Status { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }

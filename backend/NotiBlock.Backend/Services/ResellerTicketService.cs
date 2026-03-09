@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace NotiBlock.Backend.Services
 {
     public class ResellerTicketService(
-        AppDbContext context, 
+        AppDbContext context,
         ILogger<ResellerTicketService> logger,
         INotificationService notificationService) : IResellerTicketService
     {
@@ -60,6 +60,10 @@ namespace NotiBlock.Backend.Services
                 .Include(t => t.Reseller)
                 .Include(t => t.ApprovedBy)
                 .Include(t => t.ConsumerReports)
+                    .ThenInclude(r => r.Consumer)
+                .Include(t => t.ConsumerReports)
+                    .ThenInclude(r => r.Product)
+                        .ThenInclude(p => p.Manufacturer)
                 .FirstOrDefaultAsync(t => t.Id == id);
 
             if (ticket == null)

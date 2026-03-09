@@ -148,6 +148,10 @@ namespace NotiBlock.Backend.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("PhotoPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<Guid?>("ResellerTicketId")
                         .HasColumnType("uuid");
 

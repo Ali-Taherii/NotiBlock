@@ -13,7 +13,7 @@ namespace NotiBlock.Backend.Interfaces
         Task<bool> DeleteReportAsync(Guid id, Guid consumerId);
 
         // List operations
-        Task<PagedResultsDTO<ConsumerReport>> GetConsumerReportsAsync(Guid consumerId, int page, int pageSize);
+        Task<PagedResultsDTO<ConsumerReportResponseDTO>> GetConsumerReportsAsync(Guid consumerId, int page, int pageSize);
         Task<PagedResultsDTO<ConsumerReport>> GetReportsByProductAsync(string serialNumber, int page, int pageSize);
         Task<PagedResultsDTO<ConsumerReport>> GetAllReportsAsync(int page, int pageSize);
         Task<PagedResultsDTO<ConsumerReport>> GetReportsByStatusAsync(ReportStatus status, int page, int pageSize);

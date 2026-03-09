@@ -3,6 +3,7 @@ import { getPendingTickets as getAllTickets } from '../../../api/regulatorReview
 import { getTicketById } from '../../../api/resellerTickets';
 import { createReview } from '../../../api/regulatorReviews';
 import { useToast } from '../../../hooks/useToast';
+import { resolveMediaUrl } from '../../../utils/mediaUrl';
 import { FiFileText, FiClock, FiCheckCircle, FiXCircle, FiAlertCircle, FiEye } from 'react-icons/fi';
 
 export default function TicketsSection() {
@@ -355,6 +356,19 @@ export default function TicketsSection() {
                       </span>
                       <p className="text-gray-700">{report.description}</p>
                     </div>
+
+                    {(report.photoUrl || report.photoPath) && (
+                      <div className="mb-4">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1">
+                          Attached Photo
+                        </span>
+                        <img
+                          src={resolveMediaUrl(report.photoUrl || report.photoPath)}
+                          alt="Report photo"
+                          className="max-h-60 rounded-lg border border-gray-200"
+                        />
+                      </div>
+                    )}
 
                     {report.evidenceUrl && (
                       <div>

@@ -3,6 +3,7 @@ import { FiPlus, FiFileText, FiEye } from 'react-icons/fi';
 import { getMyReports, submitReport, submitReportsBulk } from '../../../api/consumerReports';
 import { getMyProducts } from '../../../api/products';
 import { useToast } from '../../../hooks/useToast';
+import { resolveMediaUrl } from '../../../utils/mediaUrl';
 import Toast from '../../shared/Toast';
 
 export default function MyReportsSection() {
@@ -14,9 +15,11 @@ export default function MyReportsSection() {
   const [formData, setFormData] = useState({
     productSerialNumber: '',
     issueDescription: '',
+    photo: null,
   });
   const [useBulk, setUseBulk] = useState(false);
   const [bulkInput, setBulkInput] = useState('');
+  const [photoPreview, setPhotoPreview] = useState(null);
   const { toast, success, error, hideToast } = useToast();
 
   const fetchReports = useCallback(async () => {
@@ -76,9 +79,18 @@ export default function MyReportsSection() {
         success(`Bulk submission completed: ${result?.succeeded ?? 0} succeeded, ${result?.failed ?? 0} failed.`);
         setBulkInput('');
       } else {
-        await submitReport(formData);
+        // Handle single report submission with optional photo
+        const submissionData = new FormData();
+        submissionData.append('productSerialNumber', formData.productSerialNumber);
+        submissionData.append('issueDescription', formData.issueDescription);
+        if (formData.photo) {
+          submissionData.append('photoFile', formData.photo);
+        }
+
+        await submitReport(submissionData);
         success('Report submitted successfully!');
-        setFormData({ productSerialNumber: '', issueDescription: '' });
+        setFormData({ productSerialNumber: '', issueDescription: '', photo: null });
+        setPhotoPreview(null);
       }
 
       setShowCreateForm(false);
@@ -209,6 +221,46 @@ export default function MyReportsSection() {
                 required
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Photo (Optional)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setFormData({ ...formData, photo: file });
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      setPhotoPreview(event.target?.result);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+              {photoPreview && (
+                <div className="mt-3">
+                  <img
+                    src={photoPreview}
+                    alt="Photo preview"
+                    className="max-h-40 rounded-lg border border-gray-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData({ ...formData, photo: null });
+                      setPhotoPreview(null);
+                    }}
+                    className="mt-2 text-sm text-red-600 hover:text-red-800"
+                  >
+                    Remove Photo
+                  </button>
+                </div>
+              )}
+            </div>
               </>
             )}
             <button
@@ -251,8 +303,7 @@ export default function MyReportsSection() {
                     </span>
                   </td>
                   <td className="py-3 px-4">
-                    {report.submittedAt ? new Date(report.submittedAt).toLocaleDateString() : 
-                     report.createdAt ? new Date(report.createdAt).toLocaleDateString() : 'N/A'}
+                    {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : 'N/A'}
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
@@ -298,6 +349,16 @@ export default function MyReportsSection() {
                 <label className="text-sm font-medium text-gray-600">Issue Description:</label>
                 <p className="bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">{selectedReport.description}</p>
               </div>
+              {(selectedReport.photoUrl || selectedReport.photoPath) && (
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Attached Photo:</label>
+                  <img
+                    src={resolveMediaUrl(selectedReport.photoUrl || selectedReport.photoPath)}
+                    alt="Report photo"
+                    className="mt-2 max-h-60 rounded-lg border border-gray-200"
+                  />
+                </div>
+              )}
               {selectedReport.resolutionNotes && (
                 <div>
                   <label className="text-sm font-medium text-gray-600">Resolution Notes:</label>
@@ -306,8 +367,7 @@ export default function MyReportsSection() {
               )}
               <div>
                 <label className="text-sm font-medium text-gray-600">Submitted:</label>
-                <p>{selectedReport.submittedAt ? new Date(selectedReport.submittedAt).toLocaleString() : 
-                    selectedReport.createdAt ? new Date(selectedReport.createdAt).toLocaleString() : 'N/A'}</p>
+                <p>{selectedReport.createdAt ? new Date(selectedReport.createdAt).toLocaleString() : 'N/A'}</p>
               </div>
             </div>
             <div className="flex gap-3 mt-6">

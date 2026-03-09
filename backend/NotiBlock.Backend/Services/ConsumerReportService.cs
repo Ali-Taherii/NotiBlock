@@ -3,17 +3,71 @@ using NotiBlock.Backend.Data;
 using NotiBlock.Backend.DTOs;
 using NotiBlock.Backend.Interfaces;
 using NotiBlock.Backend.Models;
+using System.Diagnostics;
 
 namespace NotiBlock.Backend.Services
 {
     public class ConsumerReportService(
         AppDbContext context,
         ILogger<ConsumerReportService> logger,
-        INotificationService notificationService) : IConsumerReportService
+        INotificationService notificationService,
+        IWebHostEnvironment webHostEnvironment) : IConsumerReportService
     {
         private readonly AppDbContext _context = context;
         private readonly ILogger<ConsumerReportService> _logger = logger;
         private readonly INotificationService _notificationService = notificationService;
+        private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
+
+        // Constants for file upload
+        private const long MaxFileSize = 5 * 1024 * 1024; // 5 MB
+        private readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+        private const string UploadDirectory = "uploads/reports";
+
+        private async Task<string?> SavePhotoAsync(IFormFile? photoFile)
+        {
+            if (photoFile == null || photoFile.Length == 0)
+                return null;
+
+            // Validate file size
+            if (photoFile.Length > MaxFileSize)
+            {
+                throw new InvalidOperationException($"File size must not exceed {MaxFileSize / (1024 * 1024)} MB");
+            }
+
+            // Validate file extension
+            var fileExtension = Path.GetExtension(photoFile.FileName).ToLowerInvariant();
+            if (!AllowedExtensions.Contains(fileExtension))
+            {
+                throw new InvalidOperationException($"File type not allowed. Allowed types: {string.Join(", ", AllowedExtensions)}");
+            }
+
+            try
+            {
+                // Create uploads directory if it doesn't exist
+                var uploadPath = Path.Combine(_webHostEnvironment.ContentRootPath, UploadDirectory);
+                Directory.CreateDirectory(uploadPath);
+
+                // Generate unique filename
+                var fileName = $"{Guid.NewGuid()}{fileExtension}";
+                var filePath = Path.Combine(uploadPath, fileName);
+
+                // Save file
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await photoFile.CopyToAsync(stream);
+                }
+
+                _logger.LogInformation("Photo saved successfully: {FileName}", fileName);
+
+                // Return relative path for storage in database
+                return $"{UploadDirectory}/{fileName}";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving photo file");
+                throw new InvalidOperationException("Error uploading photo", ex);
+            }
+        }
 
         public async Task<ConsumerReport> SubmitReportAsync(ConsumerReportCreateDTO dto, Guid consumerId)
         {
@@ -49,10 +103,18 @@ namespace NotiBlock.Backend.Services
                 throw new InvalidOperationException("You already have an open report for this product");
             }
 
+            // Save photo if provided
+            string? photoPath = null;
+            if (dto.PhotoFile != null)
+            {
+                photoPath = await SavePhotoAsync(dto.PhotoFile);
+            }
+
             var report = new ConsumerReport
             {
                 SerialNumber = dto.ProductSerialNumber.Trim().ToUpperInvariant(), // Normalize to uppercase
                 Description = dto.IssueDescription.Trim(),
+                PhotoPath = photoPath,
                 ConsumerId = consumerId,
                 Status = ReportStatus.Pending,
                 CreatedAt = DateTime.UtcNow
@@ -213,13 +275,15 @@ namespace NotiBlock.Backend.Services
             return true;
         }
 
-        public async Task<PagedResultsDTO<ConsumerReport>> GetConsumerReportsAsync(Guid consumerId, int page, int pageSize)
+        public async Task<PagedResultsDTO<ConsumerReportResponseDTO>> GetConsumerReportsAsync(Guid consumerId, int page, int pageSize)
         {
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 100) pageSize = 20;
 
             var query = _context.ConsumerReports
+                .Include(r => r.Consumer)
                 .Include(r => r.Product)
+                    .ThenInclude(p => p.Manufacturer)
                 .Include(r => r.ResellerTicket)
                 .Where(r => r.ConsumerId == consumerId)
                 .OrderByDescending(r => r.CreatedAt);
@@ -233,9 +297,9 @@ namespace NotiBlock.Backend.Services
             _logger.LogInformation("Retrieved {Count} reports for consumer {ConsumerId} (Page {Page})",
                 items.Count, consumerId, page);
 
-            return new PagedResultsDTO<ConsumerReport>
+            return new PagedResultsDTO<ConsumerReportResponseDTO>
             {
-                Items = items,
+                Items = [.. items.Select(MapToResponseDTO)],
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize
@@ -686,6 +750,7 @@ namespace NotiBlock.Backend.Services
                 } : null,
 
                 Description = report.Description,
+                PhotoPath = report.PhotoPath,
                 Status = report.Status,
                 CreatedAt = report.CreatedAt,
                 UpdatedAt = report.UpdatedAt,

@@ -1,6 +1,7 @@
 import apiClient from "./api";
 
 export async function submitReport(data) {
+    // FormData is handled by the API client request interceptor
     return await apiClient.post("/consumer-reports", data);
 }
 

@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const API_URL = 'https://localhost:7179/api';
+export const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
 
 // Event emitter for auth state changes (for cross-component communication)
 const authEventListeners = new Set();
@@ -28,6 +29,10 @@ const apiClient = axios.create({
 // Request interceptor (for future enhancements like CSRF tokens)
 apiClient.interceptors.request.use(
     (config) => {
+        // Don't set Content-Type for FormData - let axios handle it
+        if (config.data instanceof FormData) {
+            delete config.headers['Content-Type'];
+        }
         // Future: Add CSRF token from meta tag or cookie here
         // const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
         // if (csrfToken) {

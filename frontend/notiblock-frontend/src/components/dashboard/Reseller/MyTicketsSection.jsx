@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FiPlus, FiCheckCircle, FiEye, FiLink, FiEdit2, FiTrash2 } from 'react-icons/fi';
-import { getMyTickets, createTicket, linkReportToTicket, updateTicket, deleteTicket } from '../../../api/resellerTickets';
+import { FiPlus, FiCheckCircle, FiEye, FiLink, FiEdit2 } from 'react-icons/fi';
+import { getMyTickets, createTicket, linkReportToTicket, updateTicket } from '../../../api/resellerTickets';
 import { getResellerReports } from '../../../api/consumerReports';
 import { useToast } from '../../../hooks/useToast';
 import Toast from '../../shared/Toast';
@@ -129,20 +129,7 @@ export default function MyTicketsSection() {
     }
   };
 
-  const handleDeleteTicket = async (ticketId) => {
-    if (!confirm('Are you sure you want to delete this ticket?')) {
-      return;
-    }
 
-    try {
-      await deleteTicket(ticketId);
-      success('Ticket deleted successfully!');
-      fetchTickets();
-    } catch (err) {
-      console.error('Error deleting ticket:', err);
-      error(err.response?.data?.message || 'Failed to delete ticket');
-    }
-  };
 
   const getCategoryText = (category) => {
     const categories = {
@@ -205,8 +192,10 @@ export default function MyTicketsSection() {
     }
   };
 
-  // Available reports (not already linked to other tickets)
-  const availableReports = reports.filter(report => !report.resellerTicketId);
+  // Available reports (not already linked to other tickets, and only pending or under review)
+  const availableReports = reports.filter(report => 
+    !report.resellerTicketId && (report.status === 0 || report.status === 1)
+  );
 
   if (loading) {
     return <div className="text-center py-8">Loading tickets...</div>;
@@ -518,13 +507,6 @@ export default function MyTicketsSection() {
                         title="Edit Ticket"
                       >
                         <FiEdit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTicket(ticket.id)}
-                        className="text-red-600 hover:text-red-800 transition-colors"
-                        title="Delete Ticket"
-                      >
-                        <FiTrash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>

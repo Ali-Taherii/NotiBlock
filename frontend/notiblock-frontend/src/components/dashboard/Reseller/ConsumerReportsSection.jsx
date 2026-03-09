@@ -1,16 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FiFileText, FiEye, FiAlertCircle } from 'react-icons/fi';
 import { getResellerReports, actionOnReport } from '../../../api/consumerReports';
+import { getMyTickets } from '../../../api/resellerTickets';
 import { useToast } from '../../../hooks/useToast';
+import { resolveMediaUrl } from '../../../utils/mediaUrl';
 import Toast from '../../shared/Toast';
 
 export default function ConsumerReportsSection() {
   const [reports, setReports] = useState([]);
+  const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState(null);
   const [actionForm, setActionForm] = useState({
     action: '',
     resolutionNotes: '',
+    ticketId: '',
   });
   const { toast, success, error, hideToast } = useToast();
 
@@ -28,9 +32,22 @@ export default function ConsumerReportsSection() {
     }
   }, [error]);
 
+  const fetchTickets = useCallback(async () => {
+    try {
+      const response = await getMyTickets();
+      const items = response?.data?.items || response?.items || response || [];
+      // Filter to only show open tickets (status 0 or 1)
+      const openTickets = items.filter(ticket => ticket.status === 0 || ticket.status === 1);
+      setTickets(openTickets);
+    } catch (err) {
+      console.error('Error fetching tickets:', err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchReports();
-  }, [fetchReports]);
+    fetchTickets();
+  }, [fetchReports, fetchTickets]);
 
   const handleTakeAction = async (e) => {
     e.preventDefault();
@@ -41,17 +58,25 @@ export default function ConsumerReportsSection() {
     }
 
     try {
+      // Validate ticket selection if escalating
+      if (parseInt(actionForm.action) === 3 && !actionForm.ticketId) {
+        error('Please select a ticket to escalate the report to');
+        return;
+      }
+
       // Map action to enum value and prepare DTO
       const actionData = {
         action: parseInt(actionForm.action), // Convert string to number for enum
         resolutionNotes: actionForm.resolutionNotes || null,
+        resellerTicketId: actionForm.ticketId || null,
       };
       
       await actionOnReport(selectedReport.id, actionData);
       success('Action taken successfully!');
       setSelectedReport(null);
-      setActionForm({ action: '', resolutionNotes: '' });
+      setActionForm({ action: '', resolutionNotes: '', ticketId: '' });
       fetchReports();
+      fetchTickets();
     } catch (err) {
       console.error('Error taking action:', err);
       error(err.response?.data?.message || 'Failed to take action on report');
@@ -141,6 +166,17 @@ export default function ConsumerReportsSection() {
               </p>
             </div>
 
+            {(selectedReport.photoUrl || selectedReport.photoPath) && (
+              <div>
+                <label className="text-sm font-medium text-gray-600">Attached Photo</label>
+                <img
+                  src={resolveMediaUrl(selectedReport.photoUrl || selectedReport.photoPath)}
+                  alt="Report photo"
+                  className="mt-2 max-h-60 rounded-lg border border-gray-200"
+                />
+              </div>
+            )}
+
             <div>
               <label className="text-sm font-medium text-gray-600">Reported Date</label>
               <p className="text-gray-800">
@@ -175,6 +211,30 @@ export default function ConsumerReportsSection() {
                     <option value="4">Close - Close the report</option>
                   </select>
                 </div>
+
+                {parseInt(actionForm.action) === 3 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Select Ticket <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={actionForm.ticketId}
+                      onChange={(e) => setActionForm({ ...actionForm, ticketId: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      required
+                    >
+                      <option value="">-- Select a ticket --</option>
+                      {tickets.map((ticket) => (
+                        <option key={ticket.id} value={ticket.id}>
+                          {ticket.id} - {ticket.category === 0 ? 'Product Defect' : ticket.category === 1 ? 'Quality Issue' : ticket.category === 2 ? 'Safety Concern' : ticket.category === 3 ? 'Counterfeit' : ticket.category === 4 ? 'Supply Chain' : ticket.category === 5 ? 'Customer Complaint' : 'Other'}
+                        </option>
+                      ))}
+                    </select>
+                    {tickets.length === 0 && (
+                      <p className="text-sm text-orange-600 mt-1">No open tickets available. Create a new ticket first.</p>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

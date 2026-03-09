@@ -2,6 +2,7 @@ using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using NotiBlock.Backend.Configuration;
 using NotiBlock.Backend.Data;
@@ -49,7 +50,7 @@ try
     {
         // Handle circular references
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-    
+
         // Make property names camelCase
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
     })
@@ -83,7 +84,7 @@ try
 
     // ===== DATABASE CONFIGURATION =====
     var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection");
-    Log.Information("Database Connection String: {ConnectionString}", 
+    Log.Information("Database Connection String: {ConnectionString}",
         defaultConnection == null ? "NOT CONFIGURED" : "Configured");
 
     builder.Services.AddDbContext<AppDbContext>(options =>
@@ -185,6 +186,21 @@ try
 
     // Use CORS before other middleware that uses endpoints
     app.UseCors("AllowFrontend");
+
+    // Enable serving static files (for uploaded photos, etc.)
+    app.UseStaticFiles();
+
+    // Serve files from uploads directory
+    var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+    if (!Directory.Exists(uploadsPath))
+    {
+        Directory.CreateDirectory(uploadsPath);
+    }
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(uploadsPath),
+        RequestPath = "/uploads"
+    });
 
     app.UseHttpsRedirection();
 

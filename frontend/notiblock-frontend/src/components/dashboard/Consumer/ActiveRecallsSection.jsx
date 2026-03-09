@@ -138,8 +138,8 @@ export default function ActiveRecallsSection() {
       {/* No Products Warning */}
       {myProducts.length === 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <FiPackage className="w-5 h-5 text-blue-600 mt-0.5" />
+          <div className="flex flex-col items-center text-center gap-2">
+            <FiPackage className="w-5 h-5 text-blue-600" />
             <div>
               <h3 className="font-semibold text-blue-800">No Registered Products</h3>
               <p className="text-sm text-blue-700 mt-1">
@@ -153,8 +153,8 @@ export default function ActiveRecallsSection() {
       {/* Info Banner */}
       {recalls.length > 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <FiAlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+          <div className="flex flex-col items-center text-center gap-2">
+            <FiAlertTriangle className="w-5 h-5 text-yellow-600" />
             <div>
               <h3 className="font-semibold text-yellow-800">Product Safety Alert</h3>
               <p className="text-sm text-yellow-700 mt-1">
@@ -232,20 +232,20 @@ export default function ActiveRecallsSection() {
       {selectedRecall && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
+            <div className="flex items-center justify-between mb-6">
+              <div>
                 <h3 className="text-2xl font-semibold mb-2">Recall Details</h3>
                 <p className="text-gray-600">Product: {selectedRecall.productId}</p>
               </div>
               <button
                 onClick={() => setSelectedRecall(null)}
-                className="p-2 hover:bg-gray-100 rounded-full"
+                className="p-2 hover:bg-gray-100 rounded-full flex-shrink-0"
               >
                 <FiX className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 border-t pt-4">
               <div className="flex items-center gap-2">
                 <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(selectedRecall.status)}`}>
                   {getStatusLabel(selectedRecall.status)}

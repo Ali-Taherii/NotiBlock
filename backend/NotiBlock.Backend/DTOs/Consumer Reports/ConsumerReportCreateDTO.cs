@@ -11,5 +11,8 @@ namespace NotiBlock.Backend.DTOs
         [Required(ErrorMessage = "Issue description is required")]
         [StringLength(1000, MinimumLength = 10, ErrorMessage = "Description must be between 10 and 1000 characters")]
         public required string IssueDescription { get; set; }
+
+        // Optional photo file (for API multipart form data)
+        public IFormFile? PhotoFile { get; set; }
     }
 }

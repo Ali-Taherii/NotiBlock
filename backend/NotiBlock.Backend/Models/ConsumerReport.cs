@@ -15,13 +15,17 @@ namespace NotiBlock.Backend.Models
         [Required]
         [StringLength(100)]
         public string SerialNumber { get; set; } = string.Empty;
-        
+
         // Navigation property to Product
-        public Product? Product { get; set; }   
+        public Product? Product { get; set; }
 
         [Required]
         [StringLength(1000, MinimumLength = 10)]
         public string Description { get; set; } = string.Empty;
+
+        // Photo attachment
+        [StringLength(500)]
+        public string? PhotoPath { get; set; }
 
         [Required]
         public ReportStatus Status { get; set; } = ReportStatus.Pending;
@@ -37,7 +41,7 @@ namespace NotiBlock.Backend.Models
 
         // Resolution tracking
         public Guid? ResolvedBy { get; set; }  // Reseller who resolved it
-        
+
         [StringLength(2000)]
         public string? ResolutionNotes { get; set; }
 

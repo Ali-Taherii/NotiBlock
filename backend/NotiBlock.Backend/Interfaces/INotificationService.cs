@@ -20,7 +20,6 @@ namespace NotiBlock.Backend.Interfaces
         Task<int> GetUnreadCountAsync(Guid userId);
 
         // Automatic notification triggers
-        Task NotifyRecallIssuedAsync(Guid recallId);
         Task NotifyReportEscalatedAsync(Guid reportId);
         Task NotifyTicketStatusChangeAsync(Guid ticketId, TicketStatus newStatus);
         Task NotifyProductRegisteredAsync(Guid productId, Guid consumerId);

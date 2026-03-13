@@ -657,6 +657,20 @@ namespace NotiBlock.Backend.Services
 
             if (recall == null) return;
 
+            // Get the recalled product to find its model
+            var recalledProduct = await _context.Products
+                .FirstOrDefaultAsync(p => p.SerialNumber == recall.ProductSerialNumber);
+
+            if (recalledProduct == null)
+            {
+                _logger.LogWarning("Recalled product {ProductSerialNumber} not found for recall {RecallId}",
+                    recall.ProductSerialNumber, recallId);
+                return;
+            }
+
+            _logger.LogInformation("Found recalled product {SerialNumber} with model {Model} for recall {RecallId}",
+                recalledProduct.SerialNumber, recalledProduct.Model, recallId);
+
             var notifications = new List<NotificationCreateDTO>();
 
             // 1. Notify manufacturer (confirmation)
@@ -666,18 +680,21 @@ namespace NotiBlock.Backend.Services
                 RecipientType = "manufacturer",
                 Type = NotificationType.Info,
                 Title = "Recall Activated by Regulator",
-                Message = $"A regulator approved your recall for product {recall.ProductSerialNumber}. Reason: {recall.Reason}",
+                Message = $"A regulator approved your recall for product {recall.ProductSerialNumber} (Model: {recalledProduct.Model}). Reason: {recall.Reason}",
                 RelatedEntityId = recallId,
                 RelatedEntityType = "recall",
                 Priority = NotificationPriority.Normal
             });
 
             // 2. Notify affected consumers (products with same model)
+            _logger.LogInformation("Searching for consumers with products matching model: {Model}", recalledProduct.Model);
             var affectedConsumers = await _context.Products
-                .Where(p => p.Model == recall.ProductSerialNumber && p.OwnerId.HasValue && !p.IsDeleted)
+                .Where(p => p.Model.ToLower() == recalledProduct.Model.ToLower() && p.OwnerId.HasValue && !p.IsDeleted)
                 .Select(p => new { p.OwnerId, p.SerialNumber })
                 .Distinct()
                 .ToListAsync();
+
+            _logger.LogInformation("Found {Count} affected consumers for recall {RecallId}", affectedConsumers.Count, recallId);
 
             foreach (var consumer in affectedConsumers)
             {
@@ -687,7 +704,7 @@ namespace NotiBlock.Backend.Services
                     RecipientType = "consumer",
                     Type = NotificationType.RecallIssued,
                     Title = "CRITICAL: Product Recall Alert",
-                    Message = $"A recall has been issued for your product ({consumer.SerialNumber}). Reason: {recall.Reason}. Action required: {recall.ActionRequired}",
+                    Message = $"A recall has been issued for your product {consumer.SerialNumber} (Model: {recalledProduct.Model}). Reason: {recall.Reason}. Action required: {recall.ActionRequired}",
                     RelatedEntityId = recallId,
                     RelatedEntityType = "recall",
                     Priority = NotificationPriority.Critical,
@@ -696,11 +713,14 @@ namespace NotiBlock.Backend.Services
             }
 
             // 3. Notify resellers who distribute this product model
+            _logger.LogInformation("Searching for resellers with products matching model: {Model}", recalledProduct.Model);
             var affectedResellers = await _context.Products
-                .Where(p => p.Model == recall.ProductSerialNumber && p.ResellerId.HasValue && !p.IsDeleted)
+                .Where(p => p.Model.ToLower() == recalledProduct.Model.ToLower() && p.ResellerId.HasValue && !p.IsDeleted)
                 .Select(p => p.ResellerId!.Value)
                 .Distinct()
                 .ToListAsync();
+
+            _logger.LogInformation("Found {Count} affected resellers for recall {RecallId}", affectedResellers.Count, recallId);
 
             foreach (var resellerId in affectedResellers)
             {
@@ -710,7 +730,7 @@ namespace NotiBlock.Backend.Services
                     RecipientType = "reseller",
                     Type = NotificationType.RecallIssued,
                     Title = "Product Recall Alert",
-                    Message = $"A recall has been issued for product model {recall.ProductSerialNumber} that you distribute. Reason: {recall.Reason}. Please inform your customers.",
+                    Message = $"A recall has been issued for product model {recalledProduct.Model} that you distribute. Reason: {recall.Reason}. Please inform your customers.",
                     RelatedEntityId = recallId,
                     RelatedEntityType = "recall",
                     Priority = NotificationPriority.High,
@@ -878,29 +898,61 @@ namespace NotiBlock.Backend.Services
 
             if (recall == null) return;
 
+            // Get the recalled product to find its model
+            var recalledProduct = await _context.Products
+                .FirstOrDefaultAsync(p => p.SerialNumber == recall.ProductSerialNumber);
+
+            if (recalledProduct == null)
+            {
+                _logger.LogWarning("Recalled product {ProductSerialNumber} not found for recall {RecallId}",
+                    recall.ProductSerialNumber, recallId);
+                return;
+            }
+
+            var notifications = new List<NotificationCreateDTO>();
+
             // Notify affected consumers
             var affectedConsumers = await _context.Products
-                .Where(p => p.Model == recall.ProductSerialNumber && p.OwnerId.HasValue && !p.IsDeleted)
+                .Where(p => p.Model.ToLower() == recalledProduct.Model.ToLower() && p.OwnerId.HasValue && !p.IsDeleted)
                 .Select(p => new { p.OwnerId, p.SerialNumber })
                 .Distinct()
                 .ToListAsync();
 
-            var notifications = affectedConsumers.Select(consumer => new NotificationCreateDTO
+            notifications.AddRange(affectedConsumers.Select(consumer => new NotificationCreateDTO
             {
                 RecipientId = consumer.OwnerId!.Value,
                 RecipientType = "consumer",
                 Type = NotificationType.Info,
                 Title = "Recall Status Updated",
-                Message = $"The recall for your product ({consumer.SerialNumber}) status has been updated to: {newStatus}",
+                Message = $"The recall for your product {consumer.SerialNumber} (Model: {recalledProduct.Model}) status has been updated to: {newStatus}",
                 RelatedEntityId = recallId,
                 RelatedEntityType = "recall",
                 Priority = NotificationPriority.High
-            }).ToList();
+            }));
+
+            // Notify affected resellers
+            var affectedResellers = await _context.Products
+                .Where(p => p.Model.ToLower() == recalledProduct.Model.ToLower() && p.ResellerId.HasValue && !p.IsDeleted)
+                .Select(p => p.ResellerId!.Value)
+                .Distinct()
+                .ToListAsync();
+
+            notifications.AddRange(affectedResellers.Select(resellerId => new NotificationCreateDTO
+            {
+                RecipientId = resellerId,
+                RecipientType = "reseller",
+                Type = NotificationType.Info,
+                Title = "Recall Status Updated",
+                Message = $"The recall for product model {recalledProduct.Model} has been updated to: {newStatus}",
+                RelatedEntityId = recallId,
+                RelatedEntityType = "recall",
+                Priority = NotificationPriority.High
+            }));
 
             if (notifications.Count > 0)
             {
                 await _notificationService.CreateBulkNotificationsAsync(notifications);
-                _logger.LogInformation("Notified {Count} consumers about recall {RecallId} status update to {Status}",
+                _logger.LogInformation("Notified {Count} users about recall {RecallId} status update to {Status}",
                     notifications.Count, recallId, newStatus);
             }
         }
@@ -912,29 +964,61 @@ namespace NotiBlock.Backend.Services
 
             if (recall == null) return;
 
+            // Get the recalled product to find its model
+            var recalledProduct = await _context.Products
+                .FirstOrDefaultAsync(p => p.SerialNumber == recall.ProductSerialNumber);
+
+            if (recalledProduct == null)
+            {
+                _logger.LogWarning("Recalled product {ProductSerialNumber} not found for recall {RecallId}",
+                    recall.ProductSerialNumber, recallId);
+                return;
+            }
+
+            var notifications = new List<NotificationCreateDTO>();
+
             // Notify affected consumers
             var affectedConsumers = await _context.Products
-                .Where(p => p.Model == recall.ProductSerialNumber && p.OwnerId.HasValue && !p.IsDeleted)
+                .Where(p => p.Model.ToLower() == recalledProduct.Model.ToLower() && p.OwnerId.HasValue && !p.IsDeleted)
                 .Select(p => new { p.OwnerId, p.SerialNumber })
                 .Distinct()
                 .ToListAsync();
 
-            var notifications = affectedConsumers.Select(consumer => new NotificationCreateDTO
+            notifications.AddRange(affectedConsumers.Select(consumer => new NotificationCreateDTO
             {
                 RecipientId = consumer.OwnerId!.Value,
                 RecipientType = "consumer",
                 Type = NotificationType.Info,
                 Title = "Recall Resolved",
-                Message = $"Good news! The recall for your product ({consumer.SerialNumber}) has been marked as resolved.",
+                Message = $"Good news! The recall for your product {consumer.SerialNumber} (Model: {recalledProduct.Model}) has been marked as resolved.",
                 RelatedEntityId = recallId,
                 RelatedEntityType = "recall",
                 Priority = NotificationPriority.High
-            }).ToList();
+            }));
+
+            // Notify affected resellers
+            var affectedResellers = await _context.Products
+                .Where(p => p.Model.ToLower() == recalledProduct.Model.ToLower() && p.ResellerId.HasValue && !p.IsDeleted)
+                .Select(p => p.ResellerId!.Value)
+                .Distinct()
+                .ToListAsync();
+
+            notifications.AddRange(affectedResellers.Select(resellerId => new NotificationCreateDTO
+            {
+                RecipientId = resellerId,
+                RecipientType = "reseller",
+                Type = NotificationType.Info,
+                Title = "Recall Resolved",
+                Message = $"The recall for product model {recalledProduct.Model} has been resolved.",
+                RelatedEntityId = recallId,
+                RelatedEntityType = "recall",
+                Priority = NotificationPriority.High
+            }));
 
             if (notifications.Count > 0)
             {
                 await _notificationService.CreateBulkNotificationsAsync(notifications);
-                _logger.LogInformation("Notified {Count} consumers about recall {RecallId} resolution",
+                _logger.LogInformation("Notified {Count} users about recall {RecallId} resolution",
                     notifications.Count, recallId);
             }
         }

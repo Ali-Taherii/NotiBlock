@@ -180,51 +180,6 @@ namespace NotiBlock.Backend.Services
 
         // ==================== AUTOMATIC TRIGGERS ====================
 
-        public async Task NotifyRecallIssuedAsync(Guid recallId)
-        {
-            var recall = await _context.Recalls
-                .Include(r => r.Manufacturer)
-                .FirstOrDefaultAsync(r => r.Id == recallId);
-
-            if (recall == null)
-            {
-                _logger.LogWarning("Cannot notify recall issued: Recall {RecallId} not found", recallId);
-                return;
-            }
-
-            // Get all products affected by this recall (based on model)
-            var affectedProducts = await _context.Products
-                .Where(p => p.Model == recall.ProductSerialNumber && p.OwnerId.HasValue)
-                .Select(p => new { p.OwnerId, p.SerialNumber })
-                .Distinct()
-                .ToListAsync();
-
-            var notifications = new List<NotificationCreateDTO>();
-
-            foreach (var product in affectedProducts)
-            {
-                notifications.Add(new NotificationCreateDTO
-                {
-                    RecipientId = product.OwnerId!.Value,
-                    RecipientType = "consumer",
-                    Type = NotificationType.RecallIssued,
-                    Title = "🚨 Product Recall Alert",
-                    Message = $"A recall has been issued for your product ({product.SerialNumber}). Reason: {recall.Reason}. Action required: {recall.ActionRequired}",
-                    RelatedEntityId = recallId,
-                    RelatedEntityType = "recall",
-                    Priority = NotificationPriority.Critical,
-                    ExpiresAt = DateTime.UtcNow.AddDays(90)
-                });
-            }
-
-            if (notifications.Count != 0)
-            {
-                await CreateBulkNotificationsAsync(notifications);
-                _logger.LogInformation("Created {Count} recall notifications for recall {RecallId}",
-                    notifications.Count, recallId);
-            }
-        }
-
         public async Task NotifyReportEscalatedAsync(Guid reportId)
         {
             var report = await _context.ConsumerReports
